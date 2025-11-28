@@ -30,10 +30,17 @@ const DEFAULT_SETTINGS: ObsidianAICliSettings = {
 	promptStorageFile: 'ai-prompts.md'
 }
 
-const CLAUDE_VIEW_TYPE = 'claude-code-view';
-const GEMINI_VIEW_TYPE = 'gemini-cli-view';
-const CODEX_VIEW_TYPE = 'codex-view';
-const QWEN_VIEW_TYPE = 'qwen-view';
+// WEAVE-AI View Type Constants
+const WEAVE_VIEW_TYPE_CLAUDE = 'weave-ai-claude';
+const WEAVE_VIEW_TYPE_GEMINI = 'weave-ai-gemini';
+const WEAVE_VIEW_TYPE_CODEX = 'weave-ai-codex';
+const WEAVE_VIEW_TYPE_QWEN = 'weave-ai-qwen';
+
+// Legacy view type aliases for migration compatibility
+const CLAUDE_VIEW_TYPE = WEAVE_VIEW_TYPE_CLAUDE;
+const GEMINI_VIEW_TYPE = WEAVE_VIEW_TYPE_GEMINI;
+const CODEX_VIEW_TYPE = WEAVE_VIEW_TYPE_CODEX;
+const QWEN_VIEW_TYPE = WEAVE_VIEW_TYPE_QWEN;
 
 export default class ObsidianAICliPlugin extends Plugin {
 	settings: ObsidianAICliSettings;
@@ -76,32 +83,32 @@ export default class ObsidianAICliPlugin extends Plugin {
 		);
 
 		this.addCommand({
-			id: 'open-claude-code',
-			name: 'Claude Code',
+			id: 'weave-ai:open-claude',
+			name: 'WEAVE-AI: Claude Code',
 			callback: () => {
 				this.activateView(CLAUDE_VIEW_TYPE);
 			}
 		});
 
 		this.addCommand({
-			id: 'open-gemini-cli',
-			name: 'Gemini CLI',
+			id: 'weave-ai:open-gemini',
+			name: 'WEAVE-AI: Gemini CLI',
 			callback: () => {
 				this.activateView(GEMINI_VIEW_TYPE);
 			}
 		});
 
 		this.addCommand({
-			id: 'open-codex',
-			name: 'OpenAI Codex',
+			id: 'weave-ai:open-codex',
+			name: 'WEAVE-AI: OpenAI Codex',
 			callback: () => {
 				this.activateView(CODEX_VIEW_TYPE);
 			}
 		});
 
 		this.addCommand({
-			id: 'open-qwen',
-			name: 'Qwen Code',
+			id: 'weave-ai:open-qwen',
+			name: 'WEAVE-AI: Qwen Code',
 			callback: () => {
 				this.activateView(QWEN_VIEW_TYPE);
 			}
@@ -570,220 +577,7 @@ class ToolView extends ItemView {
 		
 		this.updateContext();
 		this.refreshPromptDropdown();
-
-		this.addStyles();
-	}
-
-	addStyles() {
-		const style = document.createElement('style');
-		style.textContent = `
-			.prompt-container { margin: 10px 0; }
-			.help-details {
-				margin: 5px 0;
-			}
-			.help-details summary {
-				cursor: pointer;
-				font-size: 0.9em;
-				color: var(--interactive-accent);
-				margin-bottom: 5px;
-			}
-			.help-details summary:hover {
-				color: var(--interactive-accent-hover);
-			}
-			.help-text {
-				font-size: 0.9em;
-				color: var(--text-muted);
-				margin: 5px 0;
-				padding: 8px;
-				background: var(--background-secondary);
-				border-radius: 4px;
-				border-left: 3px solid var(--interactive-accent);
-			}
-			.prompt-input { 
-				width: 100%; 
-				margin: 5px 0; 
-				padding: 8px;
-				border: 1px solid var(--background-modifier-border);
-				border-radius: 4px;
-				resize: vertical;
-			}
-			.button-container {
-				display: flex;
-				gap: 10px;
-				margin: 5px 0;
-			}
-			.run-button, .cancel-button { 
-				padding: 8px 16px; 
-				border: none;
-				border-radius: 4px;
-				cursor: pointer;
-			}
-			.run-button {
-				background: var(--interactive-accent);
-				color: var(--text-on-accent);
-				flex: 1;
-			}
-			.cancel-button {
-				background: var(--text-error);
-				color: white;
-			}
-			.run-button:disabled, .cancel-button:disabled {
-				background: var(--background-modifier-border);
-				cursor: not-allowed;
-			}
-			.result-container, .output-container, .context-container { 
-				margin: 15px 0; 
-				padding: 10px;
-				border: 1px solid var(--background-modifier-border);
-				border-radius: 4px;
-			}
-			.result-text {
-				background: var(--background-primary-alt);
-				padding: 10px;
-				border-radius: 4px;
-				max-height: 600px;
-				overflow-y: auto;
-				user-select: text;
-				-webkit-user-select: text;
-				-moz-user-select: text;
-				-ms-user-select: text;
-			}
-			.execution-text {
-				font-family: var(--font-monospace);
-				white-space: pre-wrap;
-				background: var(--background-primary-alt);
-				padding: 10px;
-				border-radius: 4px;
-				max-height: 300px;
-				overflow-y: auto;
-				user-select: text;
-				-webkit-user-select: text;
-				-moz-user-select: text;
-				-ms-user-select: text;
-			}
-			.execution-text {
-				margin-top: 10px;
-			}
-			.context-notice {
-				font-size: 0.85em;
-				color: var(--text-muted);
-				margin: 8px 0;
-				padding: 6px;
-				background: var(--background-secondary);
-				border-radius: 3px;
-				border-left: 2px solid var(--interactive-accent);
-			}
-			.file-autocomplete {
-				background: var(--background-primary);
-				border: 1px solid var(--background-modifier-border);
-				border-radius: 4px;
-				box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-				max-height: 200px;
-				overflow-y: auto;
-				z-index: 1000;
-				font-size: 0.9em;
-			}
-			.autocomplete-item {
-				padding: 8px 12px;
-				cursor: pointer;
-				border-bottom: 1px solid var(--background-modifier-border);
-				color: var(--text-normal);
-			}
-			.autocomplete-item:last-child {
-				border-bottom: none;
-			}
-			.autocomplete-item:hover,
-			.autocomplete-item.selected {
-				background: var(--background-modifier-hover);
-				color: var(--text-accent);
-			}
-			.autocomplete-item.selected {
-				background: var(--interactive-accent);
-				color: var(--text-on-accent);
-			}
-			.context-header {
-				display: flex;
-				align-items: center;
-				justify-content: space-between;
-				margin-bottom: 10px;
-			}
-			.context-checkbox-container {
-				display: flex;
-				align-items: center;
-				gap: 5px;
-				font-size: 0.9em;
-			}
-			.context-checkbox-container input[type="checkbox"] {
-				margin: 0;
-			}
-			.context-checkbox-container label {
-				cursor: pointer;
-				color: var(--text-normal);
-			}
-			.codex-warning {
-				margin: 10px 0;
-				padding: 10px;
-				background: var(--background-secondary);
-				border: 1px solid var(--text-warning);
-				border-radius: 4px;
-			}
-			.platform-warning {
-				color: var(--text-warning);
-				font-weight: bold;
-				margin: 0;
-				text-align: center;
-			}
-			.result-container h4 {
-				margin-top: 0;
-			}
-			.context-header h4 {
-				margin-top: 0;
-			}
-			.prompt-management {
-				margin: 10px 0;
-				padding: 10px;
-				background: var(--background-secondary);
-				border-radius: 4px;
-				border: 1px solid var(--background-modifier-border);
-			}
-			.prompt-management label {
-				display: block;
-				margin-bottom: 8px;
-				font-weight: bold;
-			}
-			.prompt-management-buttons {
-				display: flex;
-				gap: 8px;
-				align-items: center;
-			}
-			.prompt-dropdown {
-				flex: 1;
-				padding: 6px;
-				border: 1px solid var(--background-modifier-border);
-				border-radius: 4px;
-				background: var(--background-primary);
-			}
-			.load-prompt-button, .save-prompt-button {
-				padding: 6px 12px;
-				border: none;
-				border-radius: 4px;
-				cursor: pointer;
-				font-size: 0.9em;
-			}
-			.load-prompt-button {
-				background: var(--interactive-accent);
-				color: var(--text-on-accent);
-			}
-			.save-prompt-button {
-				background: var(--text-success);
-				color: white;
-			}
-			.load-prompt-button:disabled, .save-prompt-button:disabled {
-				background: var(--background-modifier-border);
-				cursor: not-allowed;
-			}
-		`;
-		document.head.appendChild(style);
+		// Note: Styles are now loaded from styles.css (external stylesheet)
 	}
 
 	async renderMarkdown(content: string): Promise<void> {
