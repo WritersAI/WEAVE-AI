@@ -1,6 +1,6 @@
 # WEAVE-AI Refactor Specification
 
-**Version**: 1.1
+**Version**: 1.2
 **Author**: Ross
 **Date**: 2025-11-28
 **Status**: Approved — Ready for Implementation
@@ -72,51 +72,87 @@ Major UI overhaul transforming the current form-based interface into a modern ch
 
 ## 3. Target UI Design
 
-### 3.1 New Layout (Chat-Style, Input at Bottom)
+### 3.1 Current Layout (Chat-Style, Input at Bottom)
+
 ```
 ┌─────────────────────────────────────┐
-│ [ICON] WEAVE-AI  [Claude ▾]         │  Header with tool switcher dropdown
-├─────────────────────────────────────┤
 │                                     │
+│  [Welcome message]                  │  Chat container
+│                                     │  (scrollable, flex-grow)
 │  ┌────────────────────────────────┐ │
-│  │ ▶ Thinking/Doing...            │ │  Thinking/Doing indicator
-│  │   (collapsed by default)       │ │  (includes reasoning + execution)
+│  │ User prompt                    │→│  User message (right-aligned)
 │  └────────────────────────────────┘ │
 │                                     │
 │  ┌────────────────────────────────┐ │
-│  │ [User prompt bubble]           │ │
-│  │                                │ │
-│  │ [AI response bubble]           │ │  Response area with
-│  │   Response content streams     │ │  persistent chat history
-│  │   here with markdown render    │ │  (scrollable, flex-grow)
-│  │                                │ │
-│  │ [User prompt bubble]           │ │
-│  │                                │ │
-│  │ [AI response streaming...]     │ │  Auto-scrolls to bottom
+│  │ ▶ Thinking...                  │ │  Thinking indicator (collapsed)
+│  └────────────────────────────────┘ │  Between user prompt & response
+│                                     │
+│  ┌────────────────────────────────┐ │
+│  │ Assistant response streams     │ │  Assistant message (left-aligned)
+│  │ here with markdown render      │ │
 │  └────────────────────────────────┘ │
 │                                     │
 ├─────────────────────────────────────┤
-│ ┌──────────────────────────────┐ ▶️ │  Input area
-│ │ Enter prompt...              │    │  (auto-resize, shift+enter
-│ └──────────────────────────────┘    │   for newline)
+│ ┌──────────────────────────┐ [↑]│  Input area + send  
+│ │ Ask Claude Code...       │       │  (auto-resize textarea)
+│ └──────────────────────────┘       │
 ├─────────────────────────────────────┤
-│ 📄 doc.md • ✏️ L5-7 🔘 │ [Prompts] │  Context bar (below input)
-└─────────────────────────────────────┘    Toggle (🔘) to enable/disable
+│ 📄 doc.md • ✏️ L5-7             [⚙] │  Context bar (file + selection) + gear
+└─────────────────────────────────────┘
 ```
 
-### 3.2 Component Specifications
+### 3.2 Gear Menu (Expanded)
 
-#### 3.2.1 Header with Tool Switcher
-- **Position**: Top of panel, fixed
-- **Components**:
-  - WEAVE-AI icon and title (left)
-  - Tool switcher dropdown (right): Claude, Gemini, Codex, Qwen
+```
+┌─────────────────────────────────────┐
+│ ...chat messages above...           │
+├─────────────────────────────────────┤
+│ ┌──────────────────────────┐ [↑]│
+│ │ Ask Claude Code...       │       │
+│ └──────────────────────────┘       │
+├─────────────────────────────────────┤
+│ 📄 doc.md • ✏️ L5-7              [⚙] │
+├─────────────────────────────────────┤
+│ ┌─────────────────────────────────┐ │  Gear menu popover
+│ │  Model: Claude             [▾]  │ │  (anchored to gear icon)
+│ │  ├─ Gemini CLI                  │ │
+│ │  ├─ OpenAI Codex                │ │  Only shows tested models
+│ │  └─ Qwen Code                   │ │
+│ │                                 │ │
+│ │  Context: On               [▾]  │ │  Toggle context inclusion
+│ │                                 │ │
+│ │  ─────────────────────────────  │ │
+│ │  Saved Prompts                  │ │
+│ │  ├─ Translate to French         │ │  Click to load prompt
+│ │  ├─ Fix Grammar                 │ │
+│ │  └─ Summarize                   │ │
+│ │                                 │ │
+│ │  [+ Save Current Prompt]        │ │
+│ └─────────────────────────────────┘ │
+└─────────────────────────────────────┘
+```
+TODO: Open prompt page from gear menu (so don't need to know where it is)
+
+### 3.3 Component Specifications
+
+#### 3.3.1 Gear Menu
+- **Position**: Button in input area, right of send button
+- **Icon**: Gear (⚙) icon
 - **Behavior**:
-  - Dropdown allows switching AI tools within the same panel
-  - Switching tools clears current conversation (with confirmation if history exists)
-  - Current tool shown in dropdown button text
+  - Click to open popover menu anchored above the button
+  - Click again or click outside to dismiss
+  - Popover contains all configuration and prompt management
+- **Contents**:
+  - **Model Selector**: Collapsible section showing current model, expands to show alternatives
+    - Only displays models that have been tested as working in settings
+    - Switching clears conversation (with confirmation if history exists)
+  - **Context Toggle**: "Context: On/Off" toggle for including file context
+  - **Saved Prompts**: List of prompts from storage file
+    - Click to load into input area
+    - Delete button per item
+  - **Save Current Prompt**: Button to save current input as new prompt
 
-#### 3.2.2 Response Area (Chat History)
+#### 3.3.2 Response Area (Chat History)
 - **Position**: Main content area, fills available vertical space
 - **Behavior**:
   - **Persistent chat history**: Previous exchanges remain visible within session
@@ -134,33 +170,30 @@ Major UI overhaul transforming the current form-based interface into a modern ch
   - Code blocks with syntax highlighting
 - **Session Scope**: History persists until panel is closed or tool is switched
 
-#### 3.2.3 Thinking/Doing Indicator
-- **Position**: Above main response content (at top of response area)
+#### 3.3.3 Thinking/Doing Indicator
+- **Position**: Inline in chat, between user message and assistant response
 - **Purpose**: Shows both AI reasoning (`<thinking>` tags) and execution context (command being run, files being accessed)
 - **Default State**: Collapsed (permanent default, not persisted)
-- **Collapsed Display**: `▶ Thinking/Doing...` with brief activity hint
+- **Collapsed Display**: `▶ Thinking...` with cycling verbs (Thinking, Reasoning, Considering, Processing)
 - **Expanded Display**:
   - Streaming thinking content from AI
-  - Command execution details (what was in "Command Execution" debug section)
+  - Command execution details
 - **Visual**:
   - Muted text color (`--text-muted`)
-  - Italic or lighter font weight
+  - Smaller font size
   - Disclosure triangle/chevron for expand/collapse
 - **Trigger**: Automatically appears when thinking tags detected or command executing
+- **Lifecycle**: One indicator per exchange, positioned after user message
 
-#### 3.2.4 Context Bar
+#### 3.3.4 Context Bar
 - **Position**: Below input area (bottom of panel)
-- **Left Side** (Context Display):
+- **Content**:
   - Abbreviated format: `📄 filename.md • ✏️ L5-7` or `📄 filename.md • No selection`
   - Tooltip on hover shows full path and selected text preview
   - Click to refresh context
-  - **Toggle switch** to enable/disable context inclusion (inline, visible)
-- **Right Side** (Actions):
-  - Single "Prompts" button for prompt management
-  - Opens dropdown/popover with saved prompts
-  - Includes "Save current" option in dropdown
+- **Note**: Context toggle moved to Gear Menu (see 3.3.1)
 
-#### 3.2.5 Input Area
+#### 3.3.5 Input Area
 - **Component**: Auto-resizing textarea (1-5 rows based on content)
 - **Behavior**:
   - `Enter`: Submit prompt
@@ -173,15 +206,14 @@ Major UI overhaul transforming the current form-based interface into a modern ch
   - Transforms to "Stop" button (square icon) during execution
 - **Placeholder**: "Ask WEAVE-AI..." or tool-specific hint
 
-#### 3.2.6 Prompts Management (Dropdown/Popover)
-- **Trigger**: Click "Prompts" button in context bar
-- **Content**:
-  - List of saved prompts (from `ai-prompts.md`)
-  - Click to load into input area
-  - Delete button (trash icon) per item
-  - "Save current prompt" option at bottom
-  - Search/filter if many prompts exist
-- **Position**: Anchored below button, doesn't obscure input area
+#### 3.3.6 Prompts Management
+- **Location**: Integrated into Gear Menu (see 3.3.1)
+- **Storage**: Markdown file (default: `System/AI Prompts.md`)
+- **Format**: `# Heading` = prompt name, content until next heading = prompt body
+- **Actions**:
+  - Click prompt name to load into input area
+  - Delete button (×) per item
+  - "Save Current Prompt" opens modal for naming
 
 ---
 
@@ -415,6 +447,101 @@ Based on [Wispr Flow](https://wisprflow.ai/)'s hold-to-talk paradigm:
 - **Privacy**: Option for local-only transcription
 - **Latency**: Target 1-2 second transcription time (per Wispr Flow benchmarks)
 
+### 7.3 Dynamic Content Area (Intelligent Context Panel)
+
+**Status**: Future vision. Documented for architectural planning.
+
+#### Concept Overview
+
+The WEAVE-AI panel will expand to become a full-height, dual-purpose workspace with:
+- **Upper Section**: Dynamic content area that adapts to user activity
+- **Lower Section**: Chat interface (current implementation)
+- **Divider**: Resizable separator between sections
+
+```
+┌─────────────────────────────────────┐
+│                                     │
+│   DYNAMIC CONTENT AREA              │  Contextually-aware
+│   (Graph / Outline / Backlinks /    │  content display
+│    Related Files / Custom Views)    │
+│                                     │
+├══════════════════════════════════════┤  ← Draggable separator
+│                                     │
+│   CHAT INTERFACE                    │  AI conversation
+│   (Current implementation)          │  (existing functionality)
+│                                     │
+└─────────────────────────────────────┘
+```
+
+#### Dynamic Content Modes
+
+The upper section intelligently surfaces the most relevant content:
+
+| Mode | Trigger/Context | Content Displayed |
+|------|-----------------|-------------------|
+| **Local Graph** | Working with interconnected notes | Mini graph centered on active file |
+| **Outline** | Long documents, structured writing | Document headings/structure |
+| **Backlinks** | Research, exploring connections | Files linking to current note |
+| **Related Files** | Discovery, finding context | AI-suggested related content |
+| **Custom** | User preference | Pinned view of user's choice |
+
+#### Intelligent Switching Behavior
+
+**Automatic Mode Selection** (optional, can be disabled):
+- Opens outline when editing documents >500 words
+- Shows local graph when file has >3 links
+- Displays backlinks when navigating from a link
+- Suggests related files when starting new work
+
+**Manual Override**:
+- Mode selector in section header
+- User can pin preferred mode
+- Memory per-file or global preference
+
+#### Resizable Separator
+
+- **Drag to resize**: Adjust split ratio between content and chat
+- **Double-click**: Toggle between presets (50/50, 30/70, collapsed)
+- **Persistence**: Remembers position per session or globally
+- **Minimum heights**: Prevent collapsing either section entirely (unless explicitly hidden)
+
+#### Implementation Considerations
+
+**Architecture**:
+- Each content mode as a pluggable component
+- Leverage existing Obsidian APIs:
+  - `app.workspace.getLeavesOfType('graph')` for graph integration
+  - `app.metadataCache.getFileCache()` for outline/headings
+  - `app.metadataCache.getBacklinksForFile()` for backlinks
+- State management for active mode and separator position
+
+**Technical Challenges**:
+- Embedding Obsidian's graph view in custom panel (may require alternative implementation)
+- Performance with large vaults (lazy loading, virtualization)
+- Syncing with active file changes
+
+**Fallback Strategy**:
+- If native views can't be embedded, implement lightweight alternatives:
+  - Simple D3.js or vis.js graph for local connections
+  - Custom outline renderer using cached metadata
+  - Backlinks list with preview on hover
+
+#### Integration with Chat
+
+The dynamic content area enhances AI interactions:
+- **Context injection**: "Summarize files shown in Related"
+- **Graph-aware prompts**: "Explain connections in this graph"
+- **Outline navigation**: Click heading → scrolls document → updates context
+
+#### Rollout Phases
+
+1. **Phase A**: Add resizable separator with placeholder upper section
+2. **Phase B**: Implement Outline mode (simplest, uses existing metadata)
+3. **Phase C**: Implement Backlinks mode
+4. **Phase D**: Implement Related Files mode (requires similarity detection)
+5. **Phase E**: Implement Local Graph mode (most complex)
+6. **Phase F**: Add intelligent auto-switching logic
+
 ---
 
 ## 8. Migration Strategy
@@ -433,24 +560,29 @@ Based on [Wispr Flow](https://wisprflow.ai/)'s hold-to-talk paradigm:
 - No breaking changes to command execution
 
 ### 8.3 Rollout Phases
-0. **Phase 0**: File structure modularization (5.1) and branding updates (6)
-1. **Phase 1**: UI refactor with new chat layout
-2. **Phase 2**: Keyboard shortcuts and focus management
-3. **Phase 3**: Polish, animations, and edge cases
-4. **Phase 4** (Lower Priority): Settings tab beautification
-5. **Phase 5** (Future): Voice input integration
+0. **Phase 0**: ✅ File structure modularization (5.1) and branding updates (6) 
+1. **Phase 1**: ✅ UI refactor with new chat layout 
+2. **Phase 2**: ✅ Settings UI refresh 
+3. **Phase 3**: Keyboard shortcuts and focus management
+4. **Phase 4**: Polish, animations, and edge cases
+5. **Phase 5** (Future): Dynamic Content Area - resizable split panel with context views
+6. **Phase 6** (Future): Voice input integration
 
-### 8.4 Settings Tab Improvements (Lower Priority)
+### 8.4 Settings Tab (Completed in Phase 2)
 
-The settings UI works but could benefit from polish after core functionality is complete:
+Settings UI refresh completed with:
 
-- **Visual Organization**: Group related settings with collapsible sections (CLI Tools, Prompts, Behavior)
-- **Prominent Separation**: Add visual dividers between tool configurations
-- **Rational Ordering**: Most-used settings first, advanced settings in collapsed "Advanced" section
-- **Inline Help**: Brief descriptions under each setting explaining impact
-- **Validation Feedback**: Real-time path validation with status indicators
+- ✓ **Professional Header**: WEAVE branding with version and GitHub link
+- ✓ **2x2 Model Card Grid**: Compact layout for all four AI tools
+- ✓ **Clickable Status Indicators**: Grey circles that light up with brand colors when tested
+- ✓ **Auto-Testing**: Previously working models re-tested on settings load
+- ✓ **Documentation Links**: External docs link (↗) for each model
+- ✓ **File Autocomplete**: Prompt library path with vault file suggestions
+- ✓ **Persistent State**: Selected model and tested status saved between restarts
 
-This is deprioritized below core UI refactor work.
+**Future Enhancements** (if needed):
+- Collapsible advanced settings section
+- Search/filter for settings with many options
 
 ---
 

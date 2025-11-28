@@ -16,6 +16,8 @@ interface ObsidianAICliSettings {
 	codexParams: string;
 	qwenParams: string;
 	promptStorageFile: string;
+	selectedTool: 'claude' | 'gemini' | 'codex' | 'qwen';
+	testedTools: string[]; // Tools that were previously tested as working
 }
 
 const DEFAULT_SETTINGS: ObsidianAICliSettings = {
@@ -27,7 +29,9 @@ const DEFAULT_SETTINGS: ObsidianAICliSettings = {
 	geminiParams: '--yolo',
 	codexParams: 'exec --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check',
 	qwenParams: '--yolo',
-	promptStorageFile: 'ai-prompts.md'
+	promptStorageFile: 'System/AI Prompts.md',
+	selectedTool: 'claude',
+	testedTools: []
 }
 
 // WEAVE-AI View Type Constants
@@ -83,57 +87,52 @@ export default class ObsidianAICliPlugin extends Plugin {
 		);
 
 		this.addCommand({
-			id: 'weave-ai:open-claude',
-			name: 'WEAVE-AI: Claude Code',
+			id: 'weave-ai:open',
+			name: 'Open WEAVE-AI',
 			callback: () => {
-				this.activateView(CLAUDE_VIEW_TYPE);
-			}
-		});
-
-		this.addCommand({
-			id: 'weave-ai:open-gemini',
-			name: 'WEAVE-AI: Gemini CLI',
-			callback: () => {
-				this.activateView(GEMINI_VIEW_TYPE);
-			}
-		});
-
-		this.addCommand({
-			id: 'weave-ai:open-codex',
-			name: 'WEAVE-AI: OpenAI Codex',
-			callback: () => {
-				this.activateView(CODEX_VIEW_TYPE);
-			}
-		});
-
-		this.addCommand({
-			id: 'weave-ai:open-qwen',
-			name: 'WEAVE-AI: Qwen Code',
-			callback: () => {
-				this.activateView(QWEN_VIEW_TYPE);
+				this.activateWeaveView();
 			}
 		});
 
 		this.addSettingTab(new ObsidianAICliSettingTab(this.app, this));
 	}
 
-	async activateView(viewType: string) {
+	async activateWeaveView() {
 		const { workspace } = this.app;
-		
-		let leaf: WorkspaceLeaf | null = null;
-		const leaves = workspace.getLeavesOfType(viewType);
 
-		if (leaves.length > 0) {
-			leaf = leaves[0];
-		} else {
-			leaf = workspace.getRightLeaf(false);
-			if (leaf) {
-				await leaf.setViewState({ type: viewType, active: true });
+		// Check for any existing WEAVE view
+		const viewTypes = [CLAUDE_VIEW_TYPE, GEMINI_VIEW_TYPE, CODEX_VIEW_TYPE, QWEN_VIEW_TYPE];
+		for (const viewType of viewTypes) {
+			const leaves = workspace.getLeavesOfType(viewType);
+			if (leaves.length > 0) {
+				workspace.revealLeaf(leaves[0]);
+				return;
 			}
 		}
 
-		if (leaf) {
-			workspace.revealLeaf(leaf);
+		// Try to open in right sidebar bottom (where Outline lives)
+		// Look for an existing leaf in that area to open next to
+		let targetLeaf: WorkspaceLeaf | null = null;
+
+		// Try to find Outline or other common bottom-right views to open next to
+		const bottomRightTypes = ['outline', 'backlink', 'tag-pane', 'outgoing-link'];
+		for (const type of bottomRightTypes) {
+			const leaves = workspace.getLeavesOfType(type);
+			if (leaves.length > 0) {
+				// Create new leaf in same split as this view
+				targetLeaf = workspace.createLeafInParent(leaves[0].parent, -1);
+				break;
+			}
+		}
+
+		// Fallback to right sidebar if no bottom-right view found
+		if (!targetLeaf) {
+			targetLeaf = workspace.getRightLeaf(false);
+		}
+
+		if (targetLeaf) {
+			await targetLeaf.setViewState({ type: CLAUDE_VIEW_TYPE, active: true });
+			workspace.revealLeaf(targetLeaf);
 		}
 	}
 
@@ -353,34 +352,55 @@ export default class ObsidianAICliPlugin extends Plugin {
 	}
 }
 
+// Chat message interface for history
+interface ChatMessage {
+	role: 'user' | 'assistant';
+	content: string;
+	timestamp: Date;
+	isStreaming?: boolean;
+}
+
 class ToolView extends ItemView {
 	plugin: ObsidianAICliPlugin;
 	toolType: 'claude' | 'gemini' | 'codex' | 'qwen';
-	promptInput: HTMLTextAreaElement;
-	runButton: HTMLButtonElement;
-	cancelButton: HTMLButtonElement;
-	savePromptButton: HTMLButtonElement;
-	loadPromptButton: HTMLButtonElement;
-	promptDropdown: HTMLSelectElement;
-	outputDiv: HTMLDivElement;
-	resultDiv: HTMLDivElement;
-	executionDiv: HTMLDivElement;
-	contextDiv: HTMLDivElement;
-	contextCheckbox: HTMLInputElement;
+
+	// New UI elements for chat layout
+	private containerEl_: HTMLDivElement;
+	private responseArea: HTMLDivElement;
+	private thinkingSection: HTMLDetailsElement;
+	private thinkingContent: HTMLDivElement;
+	private inputArea: HTMLDivElement;
+	private promptInput: HTMLTextAreaElement;
+	private sendButton: HTMLButtonElement;
+	private contextBar: HTMLDivElement;
+	private gearButton: HTMLButtonElement;
+
+	// Chat history
+	private chatHistory: ChatMessage[] = [];
+	private currentStreamingMessage: HTMLDivElement | null = null;
+
+	// State
 	isRunning: boolean = false;
 	currentProcess: any = null;
 	contextEnabled: boolean = true;
+	private thinkingBuffer: string = '';
+	private responseBuffer: string = '';
+	private userScrolledUp: boolean = false;
+
+	// Autocomplete
 	private eventRefs: any[] = [];
 	private autocompleteEl: HTMLDivElement | null = null;
 	private currentAutocompleteItems: string[] = [];
 	private selectedAutocompleteIndex: number = -1;
 	private cachedFiles: string[] = [];
 	private autocompleteDebounceTimer: number | null = null;
+	private selectionPollInterval: number | null = null;
 
 	constructor(leaf: WorkspaceLeaf, plugin: ObsidianAICliPlugin, toolType: 'claude' | 'gemini' | 'codex' | 'qwen') {
 		super(leaf);
 		this.plugin = plugin;
-		this.toolType = toolType;
+		// Use saved tool preference, fallback to passed toolType
+		this.toolType = plugin.settings.selectedTool || toolType;
 		this.eventRefs = [];
 	}
 
@@ -398,7 +418,16 @@ class ToolView extends ItemView {
 	}
 
 	getDisplayText() {
-		switch (this.toolType) {
+		return "WEAVE-AI";
+	}
+
+	getIcon() {
+		// Use WEAVE icon for all views (tool indicated by dropdown)
+		return 'bot';
+	}
+
+	getToolDisplayName(tool: 'claude' | 'gemini' | 'codex' | 'qwen'): string {
+		switch (tool) {
 			case 'claude': return "Claude Code";
 			case 'gemini': return "Gemini CLI";
 			case 'codex': return "OpenAI Codex";
@@ -406,80 +435,92 @@ class ToolView extends ItemView {
 		}
 	}
 
-	getIcon() {
-		let iconName: string;
-		switch (this.toolType) {
-			case 'claude': iconName = 'claude-icon'; break;
-			case 'gemini': iconName = 'gemini-icon'; break;
-			case 'codex': iconName = 'codex-icon'; break;
-			case 'qwen': iconName = 'qwen-icon'; break;
-		}
-		console.log(`getIcon() called for ${this.toolType}, returning: ${iconName}`);
-		return iconName;
-	}
-
 	async onOpen() {
-		const container = this.containerEl.children[1];
+		const container = this.containerEl.children[1] as HTMLElement;
 		container.empty();
-		container.createEl("h2", { text: this.getDisplayText() });
+		container.addClass('weave-container');
 
-		// Add platform warning for Codex
-		if (this.toolType === 'codex') {
-			const warningDiv = container.createDiv("codex-warning");
-			warningDiv.createEl("p", {
-				text: "⚠️ Note: OpenAI Codex only works correctly on macOS, Linux, and Windows under WSL2.",
-				cls: "platform-warning"
-			});
-		}
+		// === RESPONSE AREA (chat history) ===
+		this.responseArea = container.createDiv('weave-response-area');
 
-		const promptContainer = container.createDiv("prompt-container");
-		promptContainer.createEl("label", { text: "Prompt:" });
-		
-		// Add collapsible help text
-		const helpDetails = promptContainer.createEl("details", { cls: "help-details" });
-		helpDetails.createEl("summary", { text: "💡 Tips and examples" });
-		const helpText = helpDetails.createEl("div", {
-			cls: "help-text"
+		// Chat messages container
+		const chatContainer = this.responseArea.createDiv('weave-chat-container');
+
+		// Welcome message
+		this.addSystemMessage(chatContainer, `Welcome to WEAVE-AI! Using ${this.getToolDisplayName(this.toolType)}.\n\nType a prompt below and press Enter to send. Use @ to reference files.`);
+
+		// Track scroll position for auto-scroll behavior
+		this.responseArea.addEventListener('scroll', () => {
+			const isAtBottom = this.responseArea.scrollHeight - this.responseArea.scrollTop <= this.responseArea.clientHeight + 50;
+			this.userScrolledUp = !isAtBottom;
 		});
-		helpText.innerHTML = `Open a file (markdown, text, image, pdf) and optionally select text for automatic context. Click the "Run" button to execute the prompt.<br>
-		You can use @file_path to reference other files in your vault. For example, "@other_note.md" or "@subfolder/other_note.md".<br>
-		<br><br>
-		<strong>Example prompts:</strong><br>
-		• "Translate the selected text to French"<br>
-		• "Fix grammar in this note"<br>
-		• "Summarize the main points and add them to a new Summary header at the top of the file"<br>
-		• "This image is a character sheet, create a new note with the full character information"<br>
-		• "Create a note named "todo-list". Use dataviewjs to list all the notes with the #todo tag in this vault."<br>
-		• "Give me 5 suggestions to make this character more interesting"<br>
-		• "Summarize this PDF in a new note"<br>
-		• "Make the style of this note the same as @other_note.md"`;
-		
-		this.promptInput = promptContainer.createEl("textarea", {
-			cls: "prompt-input",
-			attr: { 
-				placeholder: "Enter your prompt here...",
-				rows: "4"
+
+		// === INPUT AREA ===
+		this.inputArea = container.createDiv('weave-input-area');
+
+		this.promptInput = this.inputArea.createEl('textarea', {
+			cls: 'weave-prompt-input',
+			attr: {
+				placeholder: `Ask ${this.getToolDisplayName(this.toolType)}...`,
+				rows: '1'
 			}
 		});
 
-		// Update context when user focuses on the prompt input
-		this.promptInput.addEventListener('focus', () => {
-			this.updateContext();
+		// Auto-resize textarea
+		this.promptInput.addEventListener('input', () => {
+			this.autoResizeInput();
+			this.handleAutocomplete({ target: this.promptInput } as any);
 		});
 
-		// Add autocomplete functionality
-		this.promptInput.addEventListener('input', (e) => {
-			this.handleAutocomplete(e);
-		});
-
+		// Enter to submit, Shift+Enter for newline
 		this.promptInput.addEventListener('keydown', (e) => {
-			this.handleAutocompleteKeydown(e);
+			if (e.key === 'Enter' && !e.shiftKey) {
+				e.preventDefault();
+				if (!this.isRunning) {
+					this.runTool();
+				}
+			} else if (e.key === 'Escape') {
+				if (this.isRunning) {
+					this.cancelTool();
+				} else {
+					this.promptInput.value = '';
+					this.autoResizeInput();
+				}
+			} else {
+				this.handleAutocompleteKeydown(e);
+			}
 		});
 
 		this.promptInput.addEventListener('blur', () => {
-			// Hide autocomplete after a short delay to allow for clicks
 			setTimeout(() => this.hideAutocomplete(), 200);
 		});
+
+		// Send/Stop button
+		this.sendButton = this.inputArea.createEl('button', { cls: 'weave-send-button' });
+		this.updateSendButton();
+		this.sendButton.addEventListener('click', () => {
+			if (this.isRunning) {
+				this.cancelTool();
+			} else {
+				this.runTool();
+			}
+		});
+
+		// === CONTEXT BAR ===
+		this.contextBar = container.createDiv('weave-context-bar');
+
+		// Left side: context info
+		const contextLeft = this.contextBar.createDiv('weave-context-left');
+		const contextInfo = contextLeft.createSpan({ cls: 'weave-context-info' });
+		contextInfo.addEventListener('click', () => this.updateContext());
+
+		// Right side: Gear button (settings menu)
+		const contextRight = this.contextBar.createDiv('weave-context-right');
+		this.gearButton = contextRight.createEl('button', {
+			cls: 'weave-gear-button'
+		});
+		this.gearButton.createSpan({ text: '⚙', cls: 'weave-gear-icon' });
+		this.gearButton.addEventListener('click', () => this.showGearMenu());
 
 		// Register workspace change listeners
 		this.registerEvent(this.plugin.app.workspace.on('active-leaf-change', () => {
@@ -489,6 +530,16 @@ class ToolView extends ItemView {
 		this.registerEvent(this.plugin.app.workspace.on('file-open', () => {
 			this.updateContext();
 		}));
+
+		// Update context on editor changes (including selection)
+		this.registerEvent(this.plugin.app.workspace.on('editor-change', () => {
+			this.updateContext();
+		}));
+
+		// Poll for selection changes (editor-change doesn't catch all selection events)
+		this.selectionPollInterval = window.setInterval(() => {
+			this.updateContextDisplay();
+		}, 500);
 
 		// Register vault change listeners for file cache invalidation
 		this.registerEvent(this.plugin.app.vault.on('create', () => {
@@ -503,95 +554,315 @@ class ToolView extends ItemView {
 			this.invalidateFileCache();
 		}));
 
-		// Prompt management section
-		const promptManagementContainer = promptContainer.createDiv("prompt-management");
-		promptManagementContainer.createEl("label", { text: "Saved Prompts:" });
-		
-		const promptManagementButtons = promptManagementContainer.createDiv("prompt-management-buttons");
-		
-		this.promptDropdown = promptManagementButtons.createEl("select", {
-			cls: "prompt-dropdown"
-		});
-		this.promptDropdown.createEl("option", { 
-			text: "Select a saved prompt...",
-			value: ""
-		});
-		this.promptDropdown.onchange = () => this.loadSelectedPrompt();
-		
-		this.loadPromptButton = promptManagementButtons.createEl("button", {
-			text: "Load",
-			cls: "load-prompt-button"
-		});
-		this.loadPromptButton.onclick = () => this.loadSelectedPrompt();
-		
-		this.savePromptButton = promptManagementButtons.createEl("button", {
-			text: "Save",
-			cls: "save-prompt-button"
-		});
-		this.savePromptButton.onclick = () => this.showSavePromptDialog();
-
-		const buttonContainer = promptContainer.createDiv("button-container");
-		
-		this.runButton = buttonContainer.createEl("button", {
-			text: "Run",
-			cls: "run-button"
-		});
-		this.runButton.onclick = () => this.runTool();
-
-		this.cancelButton = buttonContainer.createEl("button", {
-			text: "Cancel",
-			cls: "cancel-button"
-		});
-		this.cancelButton.onclick = () => this.cancelTool();
-		this.cancelButton.style.display = 'none';
-
-		// Result section (always visible)
-		const resultContainer = container.createDiv("result-container");
-		resultContainer.createEl("h4", { text: "Result:" });
-		this.resultDiv = resultContainer.createDiv("result-text");
-		
-		// Command execution section (collapsible)
-		this.outputDiv = container.createDiv("output-container");
-		const executionDetails = this.outputDiv.createEl("details");
-		executionDetails.createEl("summary", { text: "Command Execution" });
-		this.executionDiv = executionDetails.createDiv("execution-text");
-
-		this.contextDiv = container.createDiv("context-container");
-		const contextHeader = this.contextDiv.createDiv("context-header");
-		contextHeader.createEl("h4", { text: "Context:" });
-		
-		const checkboxContainer = contextHeader.createDiv("context-checkbox-container");
-		this.contextCheckbox = checkboxContainer.createEl("input", {
-			type: "checkbox",
-			attr: { id: "context-checkbox" }
-		});
-		this.contextCheckbox.checked = this.contextEnabled;
-		this.contextCheckbox.addEventListener('change', () => {
-			this.contextEnabled = this.contextCheckbox.checked;
-		});
-		
-		checkboxContainer.createEl("label", {
-			text: "Include context",
-			attr: { for: "context-checkbox" }
-		});
-		
+		// Initialize context display
 		this.updateContext();
-		this.refreshPromptDropdown();
-		// Note: Styles are now loaded from styles.css (external stylesheet)
 	}
 
-	async renderMarkdown(content: string): Promise<void> {
-		// Clear previous content
-		this.resultDiv.empty();
-		
-		// Create a component for the markdown renderer
+	// Auto-resize input textarea (1-5 rows)
+	private autoResizeInput() {
+		this.promptInput.style.height = 'auto';
+		const lineHeight = 24; // Approximate line height
+		const minHeight = lineHeight;
+		const maxHeight = lineHeight * 5;
+		const scrollHeight = this.promptInput.scrollHeight;
+		this.promptInput.style.height = Math.min(Math.max(scrollHeight, minHeight), maxHeight) + 'px';
+	}
+
+	// Update send button appearance
+	private updateSendButton() {
+		this.sendButton.empty();
+		if (this.isRunning) {
+			this.sendButton.addClass('weave-stop-button');
+			this.sendButton.removeClass('weave-send-button');
+			this.sendButton.createSpan({ text: '⏹', cls: 'weave-button-icon' });
+		} else {
+			this.sendButton.removeClass('weave-stop-button');
+			this.sendButton.addClass('weave-send-button');
+			this.sendButton.createSpan({ text: '↑', cls: 'weave-button-icon' });
+		}
+	}
+
+	// Switch to a different tool
+	private switchTool(newTool: 'claude' | 'gemini' | 'codex' | 'qwen'): void {
+		if (newTool === this.toolType) return;
+
+		// Confirm if there's chat history
+		if (this.chatHistory.length > 0) {
+			if (!confirm(`Switch to ${this.getToolDisplayName(newTool)}? This will clear the current conversation.`)) {
+				return;
+			}
+		}
+
+		this.toolType = newTool;
+		this.plugin.settings.selectedTool = newTool;
+		this.plugin.saveSettings();
+		this.chatHistory = [];
+		this.promptInput.placeholder = `Ask ${this.getToolDisplayName(newTool)}...`;
+
+		// Clear and reset response area (this also removes any thinking sections)
+		const chatContainer = this.responseArea.querySelector('.weave-chat-container');
+		if (chatContainer) {
+			chatContainer.empty();
+			this.addSystemMessage(chatContainer as HTMLElement, `Switched to ${this.getToolDisplayName(newTool)}.\n\nType a prompt below and press Enter to send.`);
+		}
+
+		// Reset thinking state
+		this.thinkingSection = null as any;
+		this.thinkingContent = null as any;
+		this.thinkingSummaryEl = null;
+		this.thinkingBuffer = '';
+	}
+
+	// Add system message to chat
+	private addSystemMessage(container: HTMLElement, text: string) {
+		const msgEl = container.createDiv('weave-message weave-message-system');
+		msgEl.createDiv({ text, cls: 'weave-message-content' });
+	}
+
+	// Add user message to chat
+	private addUserMessage(text: string): HTMLDivElement {
+		const chatContainer = this.responseArea.querySelector('.weave-chat-container') as HTMLElement;
+		const msgEl = chatContainer.createDiv('weave-message weave-message-user');
+		const contentEl = msgEl.createDiv({ cls: 'weave-message-content' });
+		contentEl.setText(text);
+
+		this.chatHistory.push({ role: 'user', content: text, timestamp: new Date() });
+		this.scrollToBottom();
+		return msgEl;
+	}
+
+	// Cute verbs for the thinking indicator (Claude Code style)
+	private readonly thinkingVerbs = [
+		'Pondering', 'Thinking', 'Contemplating', 'Reasoning', 'Processing',
+		'Analyzing', 'Considering', 'Evaluating', 'Working', 'Computing',
+		'Reflecting', 'Deliberating', 'Musing', 'Cogitating', 'Ruminating'
+	];
+	private thinkingSummaryEl: HTMLElement | null = null;
+
+	// Create thinking section for current exchange (called after user message)
+	private createThinkingSection(): void {
+		const chatContainer = this.responseArea.querySelector('.weave-chat-container') as HTMLElement;
+
+		// Create thinking/doing section
+		this.thinkingSection = chatContainer.createEl('details', { cls: 'weave-thinking' });
+		const thinkingSummary = this.thinkingSection.createEl('summary');
+		this.thinkingSummaryEl = thinkingSummary.createSpan({ cls: 'weave-thinking-summary' });
+		this.cycleThinkingVerb();
+		this.thinkingContent = this.thinkingSection.createDiv('weave-thinking-content');
+	}
+
+	// Cycle to a random thinking verb
+	private cycleThinkingVerb(): void {
+		if (!this.thinkingSummaryEl) return;
+		const verb = this.thinkingVerbs[Math.floor(Math.random() * this.thinkingVerbs.length)];
+		this.thinkingSummaryEl.setText(`${verb}...`);
+	}
+
+	// Add assistant message placeholder for streaming
+	private addAssistantMessage(): HTMLDivElement {
+		const chatContainer = this.responseArea.querySelector('.weave-chat-container') as HTMLElement;
+		const msgEl = chatContainer.createDiv('weave-message weave-message-assistant');
+		const contentEl = msgEl.createDiv({ cls: 'weave-message-content' });
+		contentEl.setText('...');
+
+		this.currentStreamingMessage = msgEl;
+		this.scrollToBottom();
+		return msgEl;
+	}
+
+	// Update streaming message content with markdown
+	private async updateStreamingMessage(content: string) {
+		if (!this.currentStreamingMessage) return;
+
+		const contentEl = this.currentStreamingMessage.querySelector('.weave-message-content') as HTMLElement;
+		if (!contentEl) return;
+
+		contentEl.empty();
 		const component = new Component();
-		
-		// Render the markdown content
-		await MarkdownRenderer.renderMarkdown(content, this.resultDiv, '', component);
-		
-		// Auto-scroll to bottom
-		this.resultDiv.scrollTop = this.resultDiv.scrollHeight;
+		await MarkdownRenderer.renderMarkdown(content, contentEl, '', component);
+
+		if (!this.userScrolledUp) {
+			this.scrollToBottom();
+		}
+	}
+
+	// Finalize streaming message
+	private finalizeStreamingMessage(content: string) {
+		if (content) {
+			this.chatHistory.push({ role: 'assistant', content, timestamp: new Date() });
+		}
+		this.currentStreamingMessage = null;
+	}
+
+	// Scroll response area to bottom
+	private scrollToBottom() {
+		this.responseArea.scrollTop = this.responseArea.scrollHeight;
+	}
+
+	// Update context display in context bar
+	private updateContextDisplay() {
+		const contextInfo = this.contextBar.querySelector('.weave-context-info') as HTMLElement;
+		if (!contextInfo) return;
+
+		const { file, selection, lineRange } = this.plugin.getCurrentContext();
+
+		let contextText = '';
+		if (!this.contextEnabled) {
+			contextText = '(context disabled)';
+			contextInfo.addClass('weave-context-disabled');
+		} else {
+			contextInfo.removeClass('weave-context-disabled');
+			if (file) {
+				const fileName = file.path.split('/').pop() || file.path;
+				contextText = `📄 ${fileName}`;
+				if (selection && selection.trim() && lineRange) {
+					contextText += ` • ✏️ L${lineRange.start}-${lineRange.end}`;
+				}
+			} else {
+				contextText = '📄 No file';
+			}
+		}
+
+		contextInfo.setText(contextText);
+
+		// Set tooltip with full details
+		let tooltip = this.contextEnabled ? '' : 'Context disabled\n';
+		if (file) {
+			tooltip += `File: ${file.path}`;
+			if (selection && selection.trim()) {
+				const preview = selection.length > 50 ? selection.substring(0, 50) + '...' : selection;
+				tooltip += `\nSelection: "${preview}"`;
+			}
+		} else {
+			tooltip += 'No file open';
+		}
+		contextInfo.setAttribute('title', tooltip);
+	}
+
+	// Show gear menu (tool selection + prompts)
+	private async showGearMenu() {
+		// Toggle: remove existing menu if open
+		const existingMenu = document.querySelector('.weave-gear-menu');
+		if (existingMenu) {
+			existingMenu.remove();
+			return;
+		}
+
+		const prompts = await this.plugin.loadPrompts();
+		const promptNames = Object.keys(prompts).sort();
+
+		const menu = document.createElement('div');
+		menu.className = 'weave-gear-menu';
+
+		// Model selection (expandable)
+		const modelSection = menu.createDiv('weave-gear-section');
+		const modelHeader = modelSection.createDiv('weave-gear-item weave-gear-model-header');
+		modelHeader.createSpan({ text: `Model: ${this.getToolDisplayName(this.toolType)}`, cls: 'weave-gear-item-name' });
+		modelHeader.createSpan({ text: '▸', cls: 'weave-gear-expand-icon' });
+
+		const modelOptions = modelSection.createDiv('weave-gear-model-options');
+		modelOptions.style.display = 'none';
+
+		// Only show tested/available tools
+		const testedTools = this.plugin.settings.testedTools || [];
+		const availableTools: Array<'claude' | 'gemini' | 'codex' | 'qwen'> = ['claude', 'codex', 'qwen', 'gemini']
+			.filter(t => testedTools.includes(t) && t !== this.toolType) as Array<'claude' | 'gemini' | 'codex' | 'qwen'>;
+
+		if (availableTools.length === 0) {
+			const noTools = modelOptions.createDiv('weave-gear-empty');
+			noTools.setText('No other models available');
+		} else {
+			availableTools.forEach(tool => {
+				const item = modelOptions.createDiv('weave-gear-item');
+				item.createSpan({ text: this.getToolDisplayName(tool), cls: 'weave-gear-item-name' });
+				item.addEventListener('click', () => {
+					menu.remove();
+					this.switchTool(tool);
+				});
+			});
+		}
+
+		modelHeader.addEventListener('click', () => {
+			const isExpanded = modelOptions.style.display !== 'none';
+			modelOptions.style.display = isExpanded ? 'none' : 'block';
+			modelHeader.querySelector('.weave-gear-expand-icon')?.setText(isExpanded ? '▸' : '▾');
+		});
+
+		// Context toggle
+		const contextItem = modelSection.createDiv('weave-gear-item weave-gear-context-toggle');
+		contextItem.createSpan({
+			text: `Context: ${this.contextEnabled ? 'On' : 'Off'}`,
+			cls: 'weave-gear-item-name'
+		});
+		contextItem.addEventListener('click', () => {
+			this.contextEnabled = !this.contextEnabled;
+			this.updateContextDisplay();
+			menu.remove();
+		});
+
+		// Prompts section
+		const promptsSection = menu.createDiv('weave-gear-section');
+		promptsSection.createDiv({ text: 'Prompts', cls: 'weave-gear-section-title' });
+
+		if (promptNames.length === 0) {
+			const emptyMsg = promptsSection.createDiv('weave-gear-empty');
+			emptyMsg.setText('No saved prompts');
+		} else {
+			promptNames.forEach(name => {
+				const item = promptsSection.createDiv('weave-gear-item');
+				item.createSpan({ text: name, cls: 'weave-gear-item-name' });
+
+				const deleteBtn = item.createSpan({ text: '×', cls: 'weave-gear-item-delete' });
+				deleteBtn.addEventListener('click', async (e) => {
+					e.stopPropagation();
+					if (confirm(`Delete prompt "${name}"?`)) {
+						await this.plugin.deletePrompt(name);
+						menu.remove();
+						new Notice(`Prompt "${name}" deleted`);
+					}
+				});
+
+				item.addEventListener('click', () => {
+					this.promptInput.value = prompts[name];
+					this.autoResizeInput();
+					menu.remove();
+				});
+			});
+		}
+
+		// Save prompt option
+		const saveItem = promptsSection.createDiv('weave-gear-item weave-gear-save');
+		saveItem.setText('+ Save current prompt');
+		saveItem.addEventListener('click', () => {
+			menu.remove();
+			this.showSavePromptDialog();
+		});
+
+		// Position menu
+		const rect = this.gearButton.getBoundingClientRect();
+		menu.style.position = 'fixed';
+		menu.style.bottom = (window.innerHeight - rect.top + 5) + 'px';
+		menu.style.right = (window.innerWidth - rect.right) + 'px';
+
+		document.body.appendChild(menu);
+
+		// Close on click outside
+		const closeHandler = (e: MouseEvent) => {
+			if (!menu.contains(e.target as Node) && e.target !== this.gearButton) {
+				menu.remove();
+				document.removeEventListener('click', closeHandler);
+			}
+		};
+		setTimeout(() => document.addEventListener('click', closeHandler), 0);
+	}
+
+	// Update thinking section content
+	private updateThinkingContent(content: string) {
+		if (!this.thinkingContent) return;
+		this.thinkingContent.empty();
+		this.thinkingContent.createEl('pre', { text: content, cls: 'weave-thinking-text' });
+		// Cycle verb on each update for visual feedback
+		this.cycleThinkingVerb();
 	}
 
 	handleAutocomplete(e: Event) {
@@ -792,50 +1063,6 @@ class ToolView extends ItemView {
 		this.hideAutocomplete();
 	}
 
-	async refreshPromptDropdown() {
-		// Clear existing options except the first one
-		while (this.promptDropdown.children.length > 1) {
-			this.promptDropdown.removeChild(this.promptDropdown.lastChild!);
-		}
-
-		try {
-			const prompts = await this.plugin.loadPrompts();
-			const promptNames = Object.keys(prompts).sort();
-			
-			for (const name of promptNames) {
-				const option = this.promptDropdown.createEl("option", {
-					text: name,
-					value: name
-				});
-			}
-		} catch (error) {
-			console.error('Failed to refresh prompt dropdown:', error);
-		}
-	}
-
-	async loadSelectedPrompt() {
-		const selectedPromptName = this.promptDropdown.value;
-		if (!selectedPromptName) {
-			return;
-		}
-
-		try {
-			const prompts = await this.plugin.loadPrompts();
-			const promptContent = prompts[selectedPromptName];
-			
-			if (promptContent) {
-				this.promptInput.value = promptContent;
-				this.promptInput.focus();
-			} else {
-				new Notice(`Prompt "${selectedPromptName}" not found`);
-				this.refreshPromptDropdown(); // Refresh in case the file was modified externally
-			}
-		} catch (error) {
-			console.error('Failed to load prompt:', error);
-			new Notice('Failed to load prompt');
-		}
-	}
-
 	async showSavePromptDialog() {
 		const promptContent = this.promptInput.value.trim();
 		if (!promptContent) {
@@ -848,7 +1075,6 @@ class ToolView extends ItemView {
 			try {
 				await this.plugin.savePrompt(name, promptContent);
 				new Notice(`Prompt "${name}" saved successfully`);
-				this.refreshPromptDropdown();
 			} catch (error) {
 				console.error('Failed to save prompt:', error);
 				new Notice(`Failed to save prompt: ${error.message}`);
@@ -859,88 +1085,61 @@ class ToolView extends ItemView {
 	}
 
 	updateContext() {
-		const { file, selection, lineRange, debug } = this.plugin.getCurrentContext();
-		
-		// Clear existing context content but keep the header
-		const existingContent = this.contextDiv.querySelector('.context-content');
-		if (existingContent) {
-			existingContent.remove();
-		}
-		
-		const contentDiv = this.contextDiv.createDiv("context-content");
-		
-		if (file) {
-			contentDiv.createEl("p", { 
-				text: `📄 Current file: ${file.path}`,
-				cls: "context-file"
-			});
-		} else {
-			contentDiv.createEl("p", { 
-				text: "📄 No file open",
-				cls: "context-no-file"
-			});
-		}
-		
-		if (selection && selection.trim()) {
-			const truncated = selection.length > 100 ? selection.substring(0, 100) + '...' : selection;
-			const lineRangeText = lineRange ? ` (lines ${lineRange.start}-${lineRange.end})` : '';
-			contentDiv.createEl("p", { 
-				text: `✏️ Selected: "${truncated}"${lineRangeText}`,
-				cls: "context-selection"
-			});
-		} else {
-			contentDiv.createEl("p", { 
-				text: "✏️ No text selected",
-				cls: "context-no-selection"
-			});
-		}
-		
-		// Add notice about text selection requirement
-		const noticeDiv = contentDiv.createDiv("selection-notice");
-		noticeDiv.createEl("p", {
-			text: "💡 Note: Text selection only works when the note is in edit mode, not preview mode.",
-			cls: "context-notice"
-		});
+		this.updateContextDisplay();
 	}
 
 	async runTool() {
 		if (this.isRunning) return;
-		
+
 		let prompt = this.promptInput.value.trim();
 		if (!prompt) {
 			new Notice('Please enter a prompt');
 			return;
 		}
 
+		// Add user message to chat
+		this.addUserMessage(prompt);
+
+		// Clear input and reset
+		this.promptInput.value = '';
+		this.autoResizeInput();
+
+		// Update UI state
 		this.isRunning = true;
-		this.runButton.disabled = true;
-		this.runButton.textContent = 'Running...';
-		this.cancelButton.style.display = 'inline-block';
-		
-		await this.renderMarkdown('*Processing prompt...*');
-		this.executionDiv.textContent = '';
+		this.updateSendButton();
+		this.responseBuffer = '';
+		this.thinkingBuffer = '';
+		this.userScrolledUp = false;
+
+		// Create thinking section (between user message and assistant response)
+		this.createThinkingSection();
+
+		// Add assistant message placeholder
+		this.addAssistantMessage();
 
 		try {
 			prompt = await this.plugin.expandFileReferences(prompt);
-			
+
 			const commandInfo = this.buildCommand(prompt);
 			const vaultPath = (this.plugin.app.vault.adapter as any).basePath || (this.plugin.app.vault.adapter as any).path || process.cwd();
-			
-			let executionText = `Full command being executed:\n${commandInfo.command}\n`;
-			
+
+			// Update thinking section with execution info
+			let executionText = `Command: ${commandInfo.command}\n`;
 			if (commandInfo.useStdin && commandInfo.stdinContent) {
-				executionText += `\nPrompt content being sent via stdin:\n${'-'.repeat(50)}\n${commandInfo.stdinContent}\n${'-'.repeat(50)}\n`;
+				executionText += `\nPrompt sent via stdin:\n${'-'.repeat(40)}\n${commandInfo.stdinContent}\n${'-'.repeat(40)}\n`;
 			}
-			
 			executionText += '\nExecuting...\n';
-			this.executionDiv.textContent = executionText;
+			this.updateThinkingContent(executionText);
 			console.log(commandInfo.command);
-			
+
 			await this.runCommandWithSpawn(commandInfo.command, vaultPath, commandInfo.stdinContent);
-			
+
 		} catch (error) {
-			await this.renderMarkdown(`**Error:** ${error.message}`);
-			this.executionDiv.textContent += `\nError: ${error.message}`;
+			// Update streaming message with error
+			await this.updateStreamingMessage(`**Error:** ${error.message}`);
+			this.thinkingBuffer += `\nError: ${error.message}`;
+			this.updateThinkingContent(this.thinkingBuffer);
+
 			if (error.message.includes('ENOENT')) {
 				new Notice('CLI tool not found. Check the path in settings.');
 			} else if (error.message.includes('cancelled')) {
@@ -950,9 +1149,8 @@ class ToolView extends ItemView {
 			}
 		} finally {
 			this.isRunning = false;
-			this.runButton.disabled = false;
-			this.runButton.textContent = 'Run';
-			this.cancelButton.style.display = 'none';
+			this.updateSendButton();
+			this.finalizeStreamingMessage(this.responseBuffer);
 			this.currentProcess = null;
 		}
 	}
@@ -960,8 +1158,8 @@ class ToolView extends ItemView {
 	async runCommandWithSpawn(command: string, cwd: string, stdinContent?: string): Promise<void> {
 		return new Promise((resolve, reject) => {
 			const timeout = 600000;
-			
-			this.currentProcess = spawn(command, [], { 
+
+			this.currentProcess = spawn(command, [], {
 				cwd,
 				shell: true,
 				stdio: ['pipe', 'pipe', 'pipe']
@@ -977,55 +1175,50 @@ class ToolView extends ItemView {
 				}
 			}
 
-			let fullOutput = '';
-			let resultBuffer = '';
-			let isFirstOutput = true;
-
-
 			this.currentProcess.stdout?.on('data', async (data: Buffer) => {
 				const output = data.toString();
-				fullOutput += output;
-				
-				// Add to execution log
-				this.executionDiv.textContent += output;
-				this.executionDiv.scrollTop = this.executionDiv.scrollHeight;
-				
-				// For result display, accumulate in buffer and filter
-				resultBuffer += output;
-				
+
+				// Add to thinking/doing log
+				this.thinkingBuffer += output;
+				this.updateThinkingContent(this.thinkingBuffer);
+
+				// For response display, accumulate in buffer and filter
+				this.responseBuffer += output;
+
 				// Apply filtering for Gemini
-				// Loaded cached credentials.
-				let filteredResult = resultBuffer;
+				let filteredResult = this.responseBuffer;
 				if (this.toolType === 'gemini') {
 					filteredResult = filteredResult.replace(/^Loaded cached credentials\.\s*\n?/m, '');
 				}
 
 				// Apply filtering for Qwen
-				// Loaded cached Qwen credentials.
 				if (this.toolType === 'qwen') {
 					filteredResult = filteredResult.replace(/^Loaded cached Qwen credentials\.\s*\n?/m, '');
 				}
-				
-				// Update result display with markdown rendering
-				await this.renderMarkdown(filteredResult);
+
+				// Update streaming message with markdown rendering
+				await this.updateStreamingMessage(filteredResult);
 			});
 
 			this.currentProcess.stderr?.on('data', (data: Buffer) => {
 				const output = data.toString();
-				this.executionDiv.textContent += '\nStderr: ' + output;
-				this.executionDiv.scrollTop = this.executionDiv.scrollHeight;
+				this.thinkingBuffer += '\nStderr: ' + output;
+				this.updateThinkingContent(this.thinkingBuffer);
 			});
 
 			this.currentProcess.on('close', async (code: number, signal: string) => {
 				if (code === 0) {
-					this.executionDiv.textContent += '\n\nCommand completed successfully.';
+					this.thinkingBuffer += '\n\nCommand completed successfully.';
+					this.updateThinkingContent(this.thinkingBuffer);
 					resolve();
 				} else if (signal === 'SIGTERM' || signal === 'SIGKILL') {
-					this.executionDiv.textContent += '\n\nCommand was cancelled.';
-					await this.renderMarkdown('*Command was cancelled.*');
+					this.thinkingBuffer += '\n\nCommand was cancelled.';
+					this.updateThinkingContent(this.thinkingBuffer);
+					await this.updateStreamingMessage(this.responseBuffer + '\n\n*[Cancelled]*');
 					reject(new Error('Command was cancelled'));
 				} else {
-					this.executionDiv.textContent += `\n\nCommand failed with exit code ${code}`;
+					this.thinkingBuffer += `\n\nCommand failed with exit code ${code}`;
+					this.updateThinkingContent(this.thinkingBuffer);
 					reject(new Error(`Command failed with exit code ${code}`));
 				}
 			});
@@ -1107,12 +1300,10 @@ class ToolView extends ItemView {
 					this.currentProcess.kill('SIGKILL');
 				}
 			}, 2000);
-			
+
 			// Reset UI state immediately
 			this.isRunning = false;
-			this.runButton.disabled = false;
-			this.runButton.textContent = 'Run';
-			this.cancelButton.style.display = 'none';
+			this.updateSendButton();
 			this.currentProcess = null;
 		}
 	}
@@ -1130,6 +1321,12 @@ class ToolView extends ItemView {
 		if (this.autocompleteDebounceTimer) {
 			clearTimeout(this.autocompleteDebounceTimer);
 			this.autocompleteDebounceTimer = null;
+		}
+
+		// Clean up selection poll interval
+		if (this.selectionPollInterval) {
+			clearInterval(this.selectionPollInterval);
+			this.selectionPollInterval = null;
 		}
 		
 		// Clean up autocomplete element
@@ -1229,6 +1426,31 @@ class SavePromptModal extends Modal {
 
 class ObsidianAICliSettingTab extends PluginSettingTab {
 	plugin: ObsidianAICliPlugin;
+	private statusCircles: Map<string, HTMLElement> = new Map();
+
+	// Documentation URLs for each tool
+	private readonly toolDocs: Record<string, string> = {
+		claude: 'https://docs.anthropic.com/en/docs/claude-code/getting-started',
+		codex: 'https://github.com/openai/codex',
+		qwen: 'https://github.com/QwenLM/Qwen-Agent',
+		gemini: 'https://github.com/google-gemini/gemini-cli'
+	};
+
+	// Brand colors for each tool
+	private readonly toolColors: Record<string, string> = {
+		claude: '#D97706',  // orange
+		codex: '#10B981',   // green
+		qwen: '#8B5CF6',    // purple
+		gemini: '#3B82F6'   // blue
+	};
+
+	// Path settings for each tool
+	private readonly toolPaths: Record<string, keyof ObsidianAICliSettings> = {
+		claude: 'claudeCodePath',
+		codex: 'codexPath',
+		qwen: 'qwenPath',
+		gemini: 'geminiCliPath'
+	};
 
 	constructor(app: App, plugin: ObsidianAICliPlugin) {
 		super(app, plugin);
@@ -1237,177 +1459,289 @@ class ObsidianAICliSettingTab extends PluginSettingTab {
 
 	display(): void {
 		const {containerEl} = this;
-
 		containerEl.empty();
+		containerEl.addClass('weave-settings');
 
-		containerEl.createEl('h2', {text: 'AI Tools Settings'});
+		// Header
+		const header = containerEl.createDiv('weave-settings-header');
 
-		// Claude Code Settings
-		containerEl.createEl('h3', {text: 'Claude Code'});
-
-		new Setting(containerEl)
-			.setName('CLI Path')
-			.setDesc('Path to the Claude Code CLI executable')
-			.addText(text => text
-				.setPlaceholder('claude')
-				.setValue(this.plugin.settings.claudeCodePath)
-				.onChange(async (value) => {
-					this.plugin.settings.claudeCodePath = value;
-					await this.plugin.saveSettings();
-				}))
-			.addButton(button => button
-				.setButtonText('Test')
-				.onClick(async () => {
-					try {
-						await execAsync(`${this.plugin.settings.claudeCodePath} --version`);
-						new Notice('Claude Code CLI found and working!');
-					} catch (error) {
-						new Notice('Claude Code CLI not found or not working. Check the path.');
-					}
-				}));
-
-		new Setting(containerEl)
-			.setName('Parameters')
-			.setDesc('Command line parameters and flags for Claude Code CLI')
-			.addText(text => text
-				.setPlaceholder('--allowedTools Read,Edit,Write,Bash,Grep,MultiEdit,WebFetch,TodoRead,TodoWrite,WebSearch')
-				.setValue(this.plugin.settings.claudeParams)
-				.onChange(async (value) => {
-					this.plugin.settings.claudeParams = value;
-					await this.plugin.saveSettings();
-				}));
-
-		// Gemini CLI Settings
-		containerEl.createEl('h3', {text: 'Gemini CLI'});
-
-		new Setting(containerEl)
-			.setName('CLI Path')
-			.setDesc('Path to the Gemini CLI executable')
-			.addText(text => text
-				.setPlaceholder('gemini')
-				.setValue(this.plugin.settings.geminiCliPath)
-				.onChange(async (value) => {
-					this.plugin.settings.geminiCliPath = value;
-					await this.plugin.saveSettings();
-				}))
-			.addButton(button => button
-				.setButtonText('Test')
-				.onClick(async () => {
-					try {
-						await execAsync(`${this.plugin.settings.geminiCliPath} --version`);
-						new Notice('Gemini CLI found and working!');
-					} catch (error) {
-						new Notice('Gemini CLI not found or not working. Check the path.');
-					}
-				}));
-
-		new Setting(containerEl)
-			.setName('Parameters')
-			.setDesc('Command line parameters and flags for Gemini CLI')
-			.addText(text => text
-				.setPlaceholder('--yolo')
-				.setValue(this.plugin.settings.geminiParams)
-				.onChange(async (value) => {
-					this.plugin.settings.geminiParams = value;
-					await this.plugin.saveSettings();
-				}));
-
-		// OpenAI Codex Settings
-		containerEl.createEl('h3', {text: 'OpenAI Codex'});
-
-		// Add platform compatibility warning
-		const codexWarning = containerEl.createEl('div', {
-			cls: 'setting-item-description',
-			text: '⚠️ Note: OpenAI Codex only works correctly on macOS, Linux, and Windows under WSL2.'
+		const headerLeft = header.createDiv('weave-settings-header-left');
+		headerLeft.createEl('h1', { text: 'WEAVE' });
+		const headerMeta = headerLeft.createDiv('weave-settings-meta');
+		headerMeta.createSpan({ text: `v${this.plugin.manifest.version}`, cls: 'weave-settings-version' });
+		const githubLink = headerMeta.createEl('a', {
+			text: 'GitHub',
+			cls: 'weave-settings-github',
+			href: 'https://github.com/rosshannon7677/WEAVE-AI'
 		});
-		codexWarning.style.color = 'var(--text-warning)';
-		codexWarning.style.fontWeight = 'bold';
-		codexWarning.style.marginBottom = '10px';
+		githubLink.setAttribute('target', '_blank');
 
-		new Setting(containerEl)
-			.setName('CLI Path')
-			.setDesc('Path to the OpenAI Codex CLI executable')
-			.addText(text => text
-				.setPlaceholder('codex')
-				.setValue(this.plugin.settings.codexPath)
-				.onChange(async (value) => {
-					this.plugin.settings.codexPath = value;
-					await this.plugin.saveSettings();
-				}))
-			.addButton(button => button
-				.setButtonText('Test')
-				.onClick(async () => {
-					try {
-						await execAsync(`${this.plugin.settings.codexPath} --version`);
-						new Notice('OpenAI Codex CLI found and working!');
-					} catch (error) {
-						new Notice('OpenAI Codex CLI not found or not working. Check the path.');
-					}
-				}));
-
-		new Setting(containerEl)
-			.setName('Parameters')
-			.setDesc('Command line parameters and flags for OpenAI Codex CLI')
-			.addText(text => text
-				.setPlaceholder('exec --full-auto --skip-git-repo-check')
-				.setValue(this.plugin.settings.codexParams)
-				.onChange(async (value) => {
-					this.plugin.settings.codexParams = value;
-					await this.plugin.saveSettings();
-				}));
-
-		// Qwen Code Settings
-		containerEl.createEl('h3', {text: 'Qwen Code'});
-
-		new Setting(containerEl)
-			.setName('CLI Path')
-			.setDesc('Path to the Qwen Code CLI executable')
-			.addText(text => text
-				.setPlaceholder('qwen')
-				.setValue(this.plugin.settings.qwenPath)
-				.onChange(async (value) => {
-					this.plugin.settings.qwenPath = value;
-					await this.plugin.saveSettings();
-				}))
-			.addButton(button => button
-				.setButtonText('Test')
-				.onClick(async () => {
-					try {
-						await execAsync(`${this.plugin.settings.qwenPath} --version`);
-						new Notice('Qwen Code CLI found and working!');
-					} catch (error) {
-						new Notice('Qwen Code CLI not found or not working. Check the path.');
-					}
-				}));
-
-		new Setting(containerEl)
-			.setName('Parameters')
-			.setDesc('Command line parameters and flags for Qwen Code CLI')
-			.addText(text => text
-				.setPlaceholder('--yolo')
-				.setValue(this.plugin.settings.qwenParams)
-				.onChange(async (value) => {
-					this.plugin.settings.qwenParams = value;
-					await this.plugin.saveSettings();
-				}));
-
-		// Prompt Storage Settings
-		containerEl.createEl('h3', {text: 'Prompt Storage'});
-
-		new Setting(containerEl)
-			.setName('Prompt Storage File')
-			.setDesc('Path to the markdown file where saved prompts will be stored. The file will be created automatically when you save your first prompt.')
-			.addText(text => text
-				.setPlaceholder('ai-prompts.md')
-				.setValue(this.plugin.settings.promptStorageFile)
-				.onChange(async (value) => {
-					this.plugin.settings.promptStorageFile = value || 'ai-prompts.md';
-					await this.plugin.saveSettings();
-				}));
-
-		containerEl.createEl('p', {
-			text: 'Note: Make sure the CLI tools are installed and accessible from your system PATH.',
-			cls: 'setting-item-description'
+		const headerRight = header.createDiv('weave-settings-header-right');
+		headerRight.createEl('p', {
+			text: "Writer's Enhanced AI Vault Experience",
+			cls: 'weave-settings-tagline'
 		});
+		headerRight.createEl('p', {
+			text: 'Orchestrate your writing with AI-powered assistance',
+			cls: 'weave-settings-subtitle'
+		});
+
+		// Models configuration
+		const modelsSection = containerEl.createDiv('weave-settings-section');
+		modelsSection.createEl('h2', { text: 'Models' });
+		const toolGrid = modelsSection.createDiv('weave-tool-grid');
+
+		// Claude
+		this.createToolSection(toolGrid, {
+			name: 'Claude Code',
+			description: 'Anthropic\'s Claude with tool use capabilities',
+			pathSetting: 'claudeCodePath',
+			paramsSetting: 'claudeParams',
+			pathPlaceholder: 'claude',
+			paramsPlaceholder: '--allowedTools Read,Edit,Write,Bash...',
+			toolKey: 'claude'
+		});
+
+		// Codex
+		this.createToolSection(toolGrid, {
+			name: 'OpenAI Codex',
+			description: 'OpenAI\'s code-specialized model',
+			warning: 'Requires macOS, Linux, or Windows WSL2',
+			pathSetting: 'codexPath',
+			paramsSetting: 'codexParams',
+			pathPlaceholder: 'codex',
+			paramsPlaceholder: 'exec --full-auto --skip-git-repo-check',
+			toolKey: 'codex'
+		});
+
+		// Qwen
+		this.createToolSection(toolGrid, {
+			name: 'Qwen Code',
+			description: 'Alibaba\'s Qwen coding assistant',
+			pathSetting: 'qwenPath',
+			paramsSetting: 'qwenParams',
+			pathPlaceholder: 'qwen',
+			paramsPlaceholder: '--yolo',
+			toolKey: 'qwen'
+		});
+
+		// Gemini
+		this.createToolSection(toolGrid, {
+			name: 'Gemini CLI',
+			description: 'Google\'s Gemini model via CLI',
+			pathSetting: 'geminiCliPath',
+			paramsSetting: 'geminiParams',
+			pathPlaceholder: 'gemini',
+			paramsPlaceholder: '--yolo',
+			toolKey: 'gemini'
+		});
+
+		// Storage section
+		const storageSection = containerEl.createDiv('weave-settings-section weave-settings-last');
+		storageSection.createEl('h2', { text: 'Storage' });
+
+		const promptSetting = new Setting(storageSection)
+			.setName('Prompt library file')
+			.setDesc('Markdown file for saved prompts (created automatically)');
+
+		// Create autocomplete input
+		const inputContainer = promptSetting.controlEl.createDiv('weave-file-input-container');
+		const input = inputContainer.createEl('input', {
+			type: 'text',
+			cls: 'weave-file-input',
+			value: this.plugin.settings.promptStorageFile,
+			placeholder: 'System/AI Prompts.md'
+		});
+
+		const autocompleteList = inputContainer.createDiv('weave-file-autocomplete');
+		autocompleteList.style.display = 'none';
+
+		// Get all markdown files for autocomplete
+		const getMarkdownFiles = () => {
+			return this.app.vault.getMarkdownFiles().map(f => f.path).sort();
+		};
+
+		input.addEventListener('input', async () => {
+			const value = input.value.toLowerCase();
+			const files = getMarkdownFiles();
+			const matches = files.filter(f => f.toLowerCase().includes(value)).slice(0, 8);
+
+			autocompleteList.empty();
+			if (matches.length > 0 && value.length > 0) {
+				matches.forEach(file => {
+					const item = autocompleteList.createDiv('weave-file-autocomplete-item');
+					item.setText(file);
+					item.addEventListener('click', async () => {
+						input.value = file;
+						this.plugin.settings.promptStorageFile = file;
+						await this.plugin.saveSettings();
+						autocompleteList.style.display = 'none';
+					});
+				});
+				autocompleteList.style.display = 'block';
+			} else {
+				autocompleteList.style.display = 'none';
+			}
+
+			// Save value even if not in autocomplete
+			this.plugin.settings.promptStorageFile = input.value || 'System/AI Prompts.md';
+			await this.plugin.saveSettings();
+		});
+
+		input.addEventListener('blur', () => {
+			// Delay to allow click on autocomplete item
+			setTimeout(() => { autocompleteList.style.display = 'none'; }, 200);
+		});
+
+		input.addEventListener('focus', () => {
+			if (input.value.length > 0) {
+				input.dispatchEvent(new Event('input'));
+			}
+		});
+
+		// Help section
+		const helpSection = containerEl.createDiv('weave-settings-help');
+		helpSection.createEl('h2', { text: 'Getting Started' });
+		const helpText = helpSection.createDiv('weave-help-content');
+		helpText.innerHTML = `
+			<p><strong>1.</strong> Install the CLI tools you want to use (click the docs link on each model card)</p>
+			<p><strong>2.</strong> Configure the paths above (or leave default if the tool is in your PATH)</p>
+			<p><strong>3.</strong> Click the circle on each model card to test if it's installed correctly</p>
+			<p><strong>4.</strong> Open WEAVE-AI from the command palette (<code>Cmd/Ctrl+P</code> → "Open WEAVE-AI")</p>
+			<p style="margin-top: 12px; color: var(--text-muted); font-size: 0.85em;">
+				<strong>Tips:</strong> Use <code>@filename</code> in prompts to reference files. Select text in the editor to include it as context. Use the gear menu to switch models and manage saved prompts.
+			</p>
+		`;
+
+		// Auto-test previously tested tools
+		this.autoTestTools();
+	}
+
+	private async autoTestTools() {
+		const testedTools = this.plugin.settings.testedTools || [];
+		for (const toolKey of testedTools) {
+			const statusCircle = this.statusCircles.get(toolKey);
+			if (!statusCircle) continue;
+
+			const pathSetting = this.toolPaths[toolKey];
+			const path = this.plugin.settings[pathSetting] as string;
+			const color = this.toolColors[toolKey];
+
+			try {
+				await execAsync(`${path} --version`);
+				statusCircle.addClass('weave-tool-status-working');
+				statusCircle.style.backgroundColor = color;
+				statusCircle.setText('✓');
+			} catch {
+				// Tool no longer working, remove from tested list
+				this.plugin.settings.testedTools = testedTools.filter(t => t !== toolKey);
+				await this.plugin.saveSettings();
+			}
+		}
+	}
+
+	private createToolSection(container: HTMLElement, config: {
+		name: string;
+		description: string;
+		warning?: string;
+		pathSetting: keyof ObsidianAICliSettings;
+		paramsSetting: keyof ObsidianAICliSettings;
+		pathPlaceholder: string;
+		paramsPlaceholder: string;
+		toolKey: string;
+	}) {
+		const section = container.createDiv('weave-tool-config');
+		const color = this.toolColors[config.toolKey];
+		const docsUrl = this.toolDocs[config.toolKey];
+
+		// Header row with status circle, name, and links
+		const header = section.createDiv('weave-tool-header');
+
+		// Left side: status circle + name/description
+		const headerLeft = header.createDiv('weave-tool-header-left');
+
+		// Status circle (clickable)
+		const statusCircle = headerLeft.createDiv('weave-tool-status');
+		statusCircle.setAttribute('title', 'Click to test');
+		statusCircle.dataset.color = color;
+
+		// Store reference for auto-testing
+		this.statusCircles.set(config.toolKey, statusCircle);
+
+		statusCircle.addEventListener('click', async () => {
+			const currentPath = this.plugin.settings[config.pathSetting] as string;
+			statusCircle.removeClass('weave-tool-status-working', 'weave-tool-status-error');
+			statusCircle.addClass('weave-tool-status-testing');
+			statusCircle.style.backgroundColor = '';
+			statusCircle.empty();
+
+			try {
+				await execAsync(`${currentPath} --version`);
+				statusCircle.removeClass('weave-tool-status-testing');
+				statusCircle.addClass('weave-tool-status-working');
+				statusCircle.style.backgroundColor = color;
+				statusCircle.setText('✓');
+				new Notice(`${config.name} is working!`);
+
+				// Save to tested tools
+				if (!this.plugin.settings.testedTools.includes(config.toolKey)) {
+					this.plugin.settings.testedTools.push(config.toolKey);
+					await this.plugin.saveSettings();
+				}
+			} catch {
+				statusCircle.removeClass('weave-tool-status-testing');
+				statusCircle.addClass('weave-tool-status-error');
+				statusCircle.setText('✗');
+				new Notice(`${config.name} not found. Check the path.`);
+
+				// Remove from tested tools
+				this.plugin.settings.testedTools = this.plugin.settings.testedTools.filter(t => t !== config.toolKey);
+				await this.plugin.saveSettings();
+			}
+		});
+
+		const headerText = headerLeft.createDiv('weave-tool-header-text');
+		headerText.createEl('strong', { text: config.name });
+		headerText.createEl('span', { text: config.description, cls: 'weave-tool-desc' });
+
+		// Right side: docs link and warning
+		const headerRight = header.createDiv('weave-tool-header-right');
+
+		const docsLink = headerRight.createEl('a', {
+			text: 'Docs ↗',
+			cls: 'weave-tool-docs-link',
+			href: docsUrl
+		});
+		docsLink.setAttribute('target', '_blank');
+
+		if (config.warning) {
+			headerRight.createEl('span', {
+				text: `⚠️ ${config.warning}`,
+				cls: 'weave-tool-warning'
+			});
+		}
+
+		// Settings
+		const settings = section.createDiv('weave-tool-settings');
+
+		new Setting(settings)
+			.setName('Path')
+			.addText(text => text
+				.setPlaceholder(config.pathPlaceholder)
+				.setValue(this.plugin.settings[config.pathSetting] as string)
+				.onChange(async (value) => {
+					(this.plugin.settings[config.pathSetting] as string) = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(settings)
+			.setName('Parameters')
+			.addText(text => text
+				.setPlaceholder(config.paramsPlaceholder)
+				.setValue(this.plugin.settings[config.paramsSetting] as string)
+				.onChange(async (value) => {
+					(this.plugin.settings[config.paramsSetting] as string) = value;
+					await this.plugin.saveSettings();
+				}));
 	}
 }
