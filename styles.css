@@ -1,5 +1,448 @@
 /* WEAVE-AI Plugin Styles */
 
+/* ============================================
+   Main Container Layout
+   ============================================ */
+.weave-container {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	overflow: hidden;
+}
+
+/* ============================================
+   Header with Tool Switcher
+   ============================================ */
+.weave-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 6px 8px;
+	border-bottom: 1px solid var(--background-modifier-border);
+	background: var(--background-secondary);
+	flex-shrink: 0;
+}
+
+.weave-header-title {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.weave-icon {
+	font-size: 1em;
+}
+
+.weave-title {
+	font-weight: 600;
+	font-size: 0.9em;
+	color: var(--text-normal);
+}
+
+.weave-tool-indicator {
+	font-size: 0.7em;
+	color: var(--text-muted);
+	font-style: italic;
+}
+
+/* ============================================
+   Response Area (Chat History)
+   ============================================ */
+.weave-response-area {
+	flex: 1;
+	overflow-y: auto;
+	padding: 8px;
+	background: var(--background-primary);
+}
+
+.weave-chat-container {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+/* ============================================
+   Thinking/Doing Section
+   ============================================ */
+.weave-thinking {
+	margin-bottom: 6px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+	background: var(--background-secondary);
+}
+
+.weave-thinking summary {
+	padding: 4px 8px;
+	cursor: pointer;
+	color: var(--text-muted);
+	font-size: 0.7em;
+	user-select: none;
+}
+
+.weave-thinking summary:hover {
+	color: var(--text-normal);
+}
+
+.weave-thinking-summary {
+	font-style: italic;
+}
+
+.weave-thinking-content {
+	padding: 0 8px 6px 8px;
+	max-height: 200px;
+	overflow-y: auto;
+}
+
+.weave-thinking-text {
+	font-family: var(--font-monospace);
+	font-size: 0.7em;
+	color: var(--text-muted);
+	white-space: pre-wrap;
+	word-break: break-word;
+	margin: 0;
+}
+
+/* ============================================
+   Chat Messages
+   ============================================ */
+.weave-message {
+	max-width: 92%;
+	padding: 6px 10px;
+	border-radius: 8px;
+	line-height: 1.4;
+}
+
+.weave-message-system {
+	align-self: center;
+	max-width: 100%;
+	background: var(--background-secondary);
+	color: var(--text-muted);
+	font-size: 0.75em;
+	text-align: center;
+	border-radius: 6px;
+	padding: 8px 12px;
+}
+
+.weave-message-user {
+	align-self: flex-end;
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	border-bottom-right-radius: 4px;
+	font-size: 0.8em;
+}
+
+.weave-message-assistant {
+	align-self: flex-start;
+	background: var(--background-secondary);
+	color: var(--text-normal);
+	border-bottom-left-radius: 4px;
+	font-size: 0.8em;
+}
+
+.weave-message-content {
+	word-break: break-word;
+}
+
+.weave-message-content p:first-child {
+	margin-top: 0;
+}
+
+.weave-message-content p:last-child {
+	margin-bottom: 0;
+}
+
+/* Code blocks in messages */
+.weave-message-content pre {
+	background: var(--background-primary-alt);
+	padding: 8px;
+	border-radius: 4px;
+	overflow-x: auto;
+}
+
+.weave-message-content code {
+	font-family: var(--font-monospace);
+	font-size: 0.9em;
+}
+
+/* ============================================
+   Input Area
+   ============================================ */
+.weave-input-area {
+	display: flex;
+	align-items: flex-end;
+	gap: 6px;
+	padding: 8px;
+	border-top: 1px solid var(--background-modifier-border);
+	background: var(--background-secondary);
+	flex-shrink: 0;
+}
+
+.weave-prompt-input {
+	flex: 1;
+	resize: none;
+	padding: 6px 10px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
+	background: var(--background-primary);
+	color: var(--text-normal);
+	font-size: 0.85em;
+	line-height: 1.4;
+	min-height: 20px;
+	max-height: 100px;
+	overflow-y: auto;
+}
+
+.weave-prompt-input:focus {
+	outline: none;
+	border-color: var(--interactive-accent);
+}
+
+.weave-prompt-input::placeholder {
+	color: var(--text-muted);
+}
+
+.weave-send-button,
+.weave-stop-button {
+	width: 28px;
+	height: 28px;
+	border: none;
+	border-radius: 6px;
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+	transition: background-color 0.15s ease;
+}
+
+.weave-send-button {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
+.weave-send-button:hover {
+	background: var(--interactive-accent-hover);
+}
+
+.weave-stop-button {
+	background: var(--text-error);
+	color: white;
+}
+
+.weave-stop-button:hover {
+	opacity: 0.9;
+}
+
+.weave-button-icon {
+	font-size: 1em;
+	font-weight: bold;
+}
+
+/* ============================================
+   Context Bar
+   ============================================ */
+.weave-context-bar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 4px 8px;
+	border-top: 1px solid var(--background-modifier-border);
+	background: var(--background-primary);
+	font-size: 0.7em;
+	flex-shrink: 0;
+}
+
+.weave-context-left {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.weave-context-toggle {
+	margin: 0;
+	cursor: pointer;
+}
+
+.weave-context-info {
+	color: var(--text-muted);
+	cursor: pointer;
+	padding: 2px 6px;
+	border-radius: 4px;
+}
+
+.weave-context-info:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
+.weave-context-disabled {
+	opacity: 0.5;
+	font-style: italic;
+}
+
+.weave-context-right {
+	display: flex;
+	align-items: center;
+}
+
+.weave-gear-button {
+	padding: 2px 6px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+	background: var(--background-primary);
+	color: var(--text-muted);
+	cursor: pointer;
+}
+
+.weave-gear-button:hover {
+	background: var(--background-modifier-hover);
+	border-color: var(--interactive-accent);
+	color: var(--text-normal);
+}
+
+.weave-gear-icon {
+	font-size: 0.9em;
+}
+
+/* ============================================
+   Gear Menu
+   ============================================ */
+.weave-gear-menu {
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+	max-height: 350px;
+	overflow-y: auto;
+	min-width: 160px;
+	z-index: 1000;
+	font-size: 0.75em;
+}
+
+.weave-gear-section {
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.weave-gear-section:last-child {
+	border-bottom: none;
+}
+
+.weave-gear-section-title {
+	padding: 6px 10px 4px;
+	font-size: 0.85em;
+	font-weight: 600;
+	color: var(--text-muted);
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+}
+
+.weave-gear-item {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 5px 10px;
+	cursor: pointer;
+	color: var(--text-normal);
+}
+
+.weave-gear-item:hover {
+	background: var(--background-modifier-hover);
+}
+
+.weave-gear-item-active {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
+.weave-gear-item-active:hover {
+	background: var(--interactive-accent-hover);
+}
+
+.weave-gear-item-name {
+	flex: 1;
+}
+
+.weave-gear-model-header {
+	font-weight: 500;
+}
+
+.weave-gear-expand-icon {
+	color: var(--text-muted);
+	font-size: 0.8em;
+	margin-left: 4px;
+}
+
+.weave-gear-model-options {
+	padding-left: 10px;
+	border-left: 2px solid var(--background-modifier-border);
+	margin-left: 10px;
+}
+
+.weave-gear-item-delete {
+	color: var(--text-muted);
+	font-size: 1.1em;
+	padding: 0 2px;
+	margin-left: 6px;
+}
+
+.weave-gear-item-delete:hover {
+	color: var(--text-error);
+}
+
+.weave-gear-empty {
+	padding: 8px 10px;
+	color: var(--text-muted);
+	font-style: italic;
+}
+
+.weave-gear-save {
+	color: var(--interactive-accent);
+	font-weight: 500;
+}
+
+.weave-gear-save:hover {
+	background: var(--background-modifier-hover);
+}
+
+/* ============================================
+   File Autocomplete (preserved from original)
+   ============================================ */
+.file-autocomplete {
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+	max-height: 200px;
+	overflow-y: auto;
+	z-index: 1000;
+	font-size: 0.9em;
+}
+
+.autocomplete-item {
+	padding: 8px 12px;
+	cursor: pointer;
+	border-bottom: 1px solid var(--background-modifier-border);
+	color: var(--text-normal);
+}
+
+.autocomplete-item:last-child {
+	border-bottom: none;
+}
+
+.autocomplete-item:hover,
+.autocomplete-item.selected {
+	background: var(--background-modifier-hover);
+	color: var(--text-accent);
+}
+
+.autocomplete-item.selected {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
+/* ============================================
+   Legacy styles (for backwards compatibility)
+   ============================================ */
 .prompt-container {
 	margin: 10px 0;
 }
@@ -115,39 +558,6 @@
 	border-left: 2px solid var(--interactive-accent);
 }
 
-.file-autocomplete {
-	background: var(--background-primary);
-	border: 1px solid var(--background-modifier-border);
-	border-radius: 4px;
-	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-	max-height: 200px;
-	overflow-y: auto;
-	z-index: 1000;
-	font-size: 0.9em;
-}
-
-.autocomplete-item {
-	padding: 8px 12px;
-	cursor: pointer;
-	border-bottom: 1px solid var(--background-modifier-border);
-	color: var(--text-normal);
-}
-
-.autocomplete-item:last-child {
-	border-bottom: none;
-}
-
-.autocomplete-item:hover,
-.autocomplete-item.selected {
-	background: var(--background-modifier-hover);
-	color: var(--text-accent);
-}
-
-.autocomplete-item.selected {
-	background: var(--interactive-accent);
-	color: var(--text-on-accent);
-}
-
 .context-header {
 	display: flex;
 	align-items: center;
@@ -245,4 +655,318 @@
 .save-prompt-button:disabled {
 	background: var(--background-modifier-border);
 	cursor: not-allowed;
+}
+
+/* ============================================
+   Settings Page
+   ============================================ */
+.weave-settings-header {
+	display: flex;
+	justify-content: flex-start;
+	align-items: flex-end;
+	padding: 16px 0;
+	border-bottom: 1px solid var(--background-modifier-border);
+	margin-bottom: 20px;
+}
+
+.weave-settings-header-left {
+	flex-shrink: 0;
+}
+
+.weave-settings-header-right {
+	flex: 1;
+	padding-left: 24px;
+	border-left: 1px solid var(--background-modifier-border);
+	margin-left: 24px;
+	text-align: right;
+}
+
+.weave-settings-header-left h1 {
+	margin: 0;
+	font-size: 1.4em;
+	font-weight: 700;
+	letter-spacing: 0.08em;
+	color: var(--text-normal);
+}
+
+.weave-settings-meta {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	margin-top: 2px;
+}
+
+.weave-settings-version {
+	font-size: 0.75em;
+	color: var(--text-muted);
+	font-family: var(--font-monospace);
+}
+
+.weave-settings-github {
+	font-size: 0.75em;
+	color: var(--text-accent);
+	text-decoration: none;
+}
+
+.weave-settings-github:hover {
+	text-decoration: underline;
+}
+
+.weave-settings-tagline {
+	margin: 0;
+	font-size: 0.95em;
+	font-weight: 500;
+	color: var(--text-normal);
+}
+
+.weave-settings-subtitle {
+	margin: 4px 0 0;
+	font-size: 0.8em;
+	color: var(--text-muted);
+	font-style: italic;
+}
+
+.weave-settings-section,
+.weave-settings-help {
+	margin-bottom: 24px;
+}
+
+.weave-settings-section h2,
+.weave-settings-help h2 {
+	font-size: 1.1em;
+	margin: 0 0 12px;
+	padding-bottom: 6px;
+	border-bottom: 1px solid var(--background-modifier-border);
+	color: var(--text-normal);
+}
+
+.weave-settings-last h2 {
+	border-bottom: none;
+}
+
+/* Tool Configuration Cards - 2x2 Grid */
+.weave-settings-section {
+	display: block;
+}
+
+.weave-settings-section h2 {
+	margin-bottom: 12px;
+}
+
+.weave-settings-section h2 ~ .weave-tool-config {
+	display: inline-block;
+	vertical-align: top;
+}
+
+.weave-tool-grid {
+	display: grid;
+	grid-template-columns: repeat(2, 1fr);
+	gap: 12px;
+}
+
+.weave-tool-config {
+	background: var(--background-secondary);
+	border-radius: 8px;
+	padding: 10px 12px;
+}
+
+.weave-tool-header {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 8px;
+	margin-bottom: 6px;
+}
+
+.weave-tool-header-left {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.weave-tool-status {
+	width: 20px;
+	height: 20px;
+	border-radius: 50%;
+	background: var(--background-modifier-border);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+	transition: all 0.2s ease;
+	flex-shrink: 0;
+	font-size: 0.7em;
+	font-weight: bold;
+	color: white;
+}
+
+.weave-tool-status:hover {
+	transform: scale(1.1);
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.weave-tool-status-testing {
+	background: var(--text-warning) !important;
+	animation: pulse 1s infinite;
+}
+
+.weave-tool-status-working {
+	color: white;
+}
+
+.weave-tool-status-error {
+	background: var(--text-error) !important;
+	color: white;
+}
+
+@keyframes pulse {
+	0%, 100% { opacity: 1; }
+	50% { opacity: 0.5; }
+}
+
+.weave-tool-header-text {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+}
+
+.weave-tool-header-text strong {
+	font-size: 0.85em;
+}
+
+.weave-tool-desc {
+	font-size: 0.7em;
+	color: var(--text-muted);
+}
+
+.weave-tool-header-right {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+	gap: 2px;
+	flex-shrink: 0;
+}
+
+.weave-tool-docs-link {
+	font-size: 0.7em;
+	color: var(--text-accent);
+	text-decoration: none;
+}
+
+.weave-tool-docs-link:hover {
+	text-decoration: underline;
+}
+
+.weave-tool-warning {
+	font-size: 0.65em;
+	color: var(--text-error);
+	text-align: right;
+	max-width: 120px;
+	line-height: 1.2;
+}
+
+.weave-tool-settings .setting-item {
+	border-top: none;
+	padding: 4px 0;
+}
+
+.weave-tool-settings .setting-item-info {
+	min-width: 80px;
+	flex-shrink: 0;
+}
+
+.weave-tool-settings .setting-item-name {
+	font-size: 0.8em;
+}
+
+.weave-tool-settings .setting-item-control {
+	flex: 1;
+	min-width: 120px;
+}
+
+.weave-tool-settings .setting-item-control input {
+	font-size: 0.8em;
+	width: 100%;
+	box-sizing: border-box;
+	padding: 6px 10px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+	background: var(--background-primary);
+	color: var(--text-normal);
+}
+
+.weave-tool-settings .setting-item-control input:focus {
+	outline: none;
+	border-color: var(--interactive-accent);
+}
+
+/* Help Section */
+.weave-help-content {
+	background: var(--background-secondary);
+	padding: 12px 16px;
+	border-radius: 8px;
+}
+
+.weave-help-content p {
+	margin: 6px 0;
+	font-size: 0.9em;
+}
+
+.weave-help-content code {
+	background: var(--background-primary);
+	padding: 2px 6px;
+	border-radius: 3px;
+	font-size: 0.85em;
+}
+
+/* File Input with Autocomplete */
+.weave-file-input-container {
+	position: relative;
+	width: 100%;
+}
+
+.weave-file-input {
+	width: 100%;
+	padding: 6px 10px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+	background: var(--background-primary);
+	color: var(--text-normal);
+	font-size: 0.9em;
+}
+
+.weave-file-input:focus {
+	outline: none;
+	border-color: var(--interactive-accent);
+}
+
+.weave-file-autocomplete {
+	position: absolute;
+	top: 100%;
+	left: 0;
+	right: 0;
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+	max-height: 200px;
+	overflow-y: auto;
+	z-index: 100;
+	margin-top: 2px;
+}
+
+.weave-file-autocomplete-item {
+	padding: 6px 10px;
+	cursor: pointer;
+	font-size: 0.85em;
+	color: var(--text-normal);
+	text-align: left;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.weave-file-autocomplete-item:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-accent);
 }

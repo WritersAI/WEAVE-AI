@@ -1,11 +1,11 @@
 {
     "id": "weave-ai",
     "name": "WEAVE-AI",
-    "version": "1.0.7",
+    "version": "0.0.3",
     "minAppVersion": "0.15.0",
     "description": "Writers' Enhanced AI Vault Experience - Orchestrate your writing with AI!",
     "author": "Ross",
-    "authorUrl": "https://github.com/BlackDragonBE",
+    "authorUrl": "https://github.com/rosshannon7677",
     "fundingUrl": "https://paypal.me/blackdragonbe",
     "isDesktopOnly": true
 }
