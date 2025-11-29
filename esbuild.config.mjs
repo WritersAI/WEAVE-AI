@@ -10,6 +10,37 @@ if you want to view the source, please visit the github repository of this plugi
 `;
 
 const prod = (process.argv[2] === "production");
+const deployAll = process.argv.includes('--all');
+
+// Dynamic import for deploy (only in dev mode)
+let deployFn = null;
+if (!prod) {
+	try {
+		const deployModule = await import('./scripts/deploy.mjs');
+		deployFn = deployModule.deploy;
+	} catch (e) {
+		// Deploy script not found or no targets configured - that's fine
+		if (e.code !== 'ERR_MODULE_NOT_FOUND') {
+			console.log('Deploy: ' + (e.message || 'No targets configured'));
+		}
+	}
+}
+
+// Deploy plugin for watch mode
+const deployPlugin = {
+	name: 'deploy',
+	setup(build) {
+		build.onEnd(result => {
+			if (result.errors.length === 0 && deployFn) {
+				try {
+					deployFn();
+				} catch (e) {
+					// Silently skip if deploy fails (e.g., no targets)
+				}
+			}
+		});
+	}
+};
 
 const context = await esbuild.context({
 	banner: {
@@ -39,6 +70,7 @@ const context = await esbuild.context({
 	treeShaking: true,
 	outfile: "main.js",
 	minify: prod,
+	plugins: prod ? [] : [deployPlugin],
 });
 
 if (prod) {

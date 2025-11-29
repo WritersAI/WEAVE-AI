@@ -18,6 +18,9 @@ main.js
 # obsidian
 data.json
 
+# deploy targets (machine-specific)
+.targets/targets.yaml
+
 # Exclude macOS Finder (System Explorer) View States
 .DS_Store
 .claude/settings.local.json
