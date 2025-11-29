@@ -5,7 +5,11 @@
     "main": "main.js",
     "scripts": {
         "dev": "node esbuild.config.mjs",
+        "dev:all": "node esbuild.config.mjs --all",
         "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+        "deploy": "node scripts/deploy.mjs",
+        "deploy:all": "node scripts/deploy.mjs --all",
+        "target:add": "node scripts/init-target.mjs",
         "version": "node version-bump.mjs && git add manifest.json versions.json"
     },
     "keywords": [],
@@ -19,6 +23,7 @@
         "esbuild": "0.17.3",
         "obsidian": "latest",
         "tslib": "2.4.0",
-        "typescript": "4.7.4"
+        "typescript": "4.7.4",
+        "yaml": "^2.8.1"
     }
 }

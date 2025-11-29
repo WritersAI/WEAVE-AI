@@ -6,6 +6,20 @@ WEAVE-AI is forked from [Obsidian AI CLI](https://github.com/BlackDragonBE/obsid
 
 ---
 
+## [0.0.4] - 2025-11-29
+
+### Added
+- Multi-target deploy system for developing across multiple Obsidian vaults
+- `npm run target:add <name> <vault-path>` - Add a new vault target
+- `npm run dev <target>` - Watch mode with deploy to specific vault
+- `npm run dev:all` - Watch mode deploying to all configured vaults
+- `npm run deploy <target>` - One-time deploy to specific vault
+- `npm run deploy:all` - Deploy to all configured vaults
+- `.targets/targets.yaml` for machine-specific vault configuration (gitignored)
+
+### Changed
+- esbuild config now integrates deploy plugin for automatic copying on rebuild
+
 ## [0.0.3] - 2025-11-28
 
 ### Added
@@ -74,6 +88,7 @@ WEAVE-AI is forked from [Obsidian AI CLI](https://github.com/BlackDragonBE/obsid
 
 | Version | Date | Summary |
 |---------|------|---------|
+| 0.0.4 | 2025-11-29 | Multi-target deploy system |
 | 0.0.3 | 2025-11-28 | Settings UI refresh |
 | 0.0.2 | 2025-11-28 | Major UI overhaul |
 | 0.0.1 | 2025-11-28 | Fork and rebrand |

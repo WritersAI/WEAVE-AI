@@ -408,6 +408,112 @@ npm run build
 
 ---
 
+## Phase 3: Multi-Target Deploy System
+
+**Date**: 2025-11-29
+**Status**: Complete
+**Version**: 0.0.4
+**Branch**: `feat/multi-build-target-local-dev-support`
+
+### Objectives
+- Enable deploying plugin to multiple Obsidian vaults simultaneously
+- Support watch mode with automatic deploy on rebuild
+- Keep vault paths machine-specific (gitignored)
+- Provide simple CLI for managing targets
+
+### Changes Made
+
+#### 1. New Scripts
+
+**scripts/init-target.mjs**
+- Adds new vault targets to `.targets/targets.yaml`
+- Creates target directory if needed
+- Usage: `npm run target:add <name> <vault-path>`
+
+**scripts/deploy.mjs**
+- Deploys built files to configured vaults
+- Copies: `main.js`, `manifest.json`, `styles.css`
+- Preserves existing `data.json` in target (plugin settings)
+- Supports single target, multiple targets, or all targets
+
+#### 2. esbuild Integration
+
+**esbuild.config.mjs**
+- Added deploy plugin that runs after each build
+- Reads targets from `.targets/targets.yaml`
+- `--all` flag deploys to all targets
+- Target name as argument deploys to specific target
+- Default target used when no argument provided
+
+#### 3. New npm Scripts
+
+| Script | Description |
+|--------|-------------|
+| `npm run dev` | Watch + deploy to default target |
+| `npm run dev <target>` | Watch + deploy to specific target |
+| `npm run dev:all` | Watch + deploy to all targets |
+| `npm run deploy` | Build + deploy to default target |
+| `npm run deploy <target>` | Build + deploy to specific target |
+| `npm run deploy:all` | Build + deploy to all targets |
+| `npm run target:add` | Add new vault target |
+
+#### 4. Configuration
+
+**.targets/targets.yaml** (gitignored):
+```yaml
+targets:
+  cwr: /Users/ross/projects/cwr-novel/.obsidian/plugins/weave-ai
+  memex: /Users/ross/Library/Mobile Documents/iCloud~md~obsidian/Documents/Memex/.obsidian/plugins/weave-ai
+  woods: /Users/ross/projects/woods-project/woods-vault/.obsidian/plugins/weave-ai
+default: cwr
+```
+
+**.targets/targets.yaml.example** (committed):
+- Template showing expected format
+- Users copy and customize for their vaults
+
+#### 5. Files Added/Modified
+
+| File | Change Type | Description |
+|------|-------------|-------------|
+| `scripts/init-target.mjs` | Created | Target initialization script |
+| `scripts/deploy.mjs` | Created | Deploy script |
+| `esbuild.config.mjs` | Modified | Added deploy plugin integration |
+| `package.json` | Modified | Added new scripts, yaml dependency |
+| `.gitignore` | Modified | Added `.targets/targets.yaml` |
+| `.targets/targets.yaml.example` | Created | Example config template |
+
+#### 6. Dependencies Added
+
+```json
+"yaml": "^2.8.1"
+```
+
+### Build Verification
+
+```bash
+npm run build  # TypeScript check + production build
+npm run deploy cwr  # Deploys to cwr vault
+npm run dev:all  # Watch mode deploying to all targets
+# Result: Success
+```
+
+### Key Decisions
+
+1. **YAML over JSON** - More readable for path configuration
+2. **Copy not symlink** - Avoids issues with iCloud paths and vault-specific data.json
+3. **Gitignored config** - Vault paths are machine-specific
+4. **Integrated with esbuild** - No separate watch process needed
+5. **Preserves data.json** - Plugin settings in each vault remain untouched
+
+### Notes
+
+- `.hotreload` file created for Obsidian hot-reload plugin compatibility
+- Paths with spaces (iCloud) work correctly with the copy approach
+- Each vault maintains independent plugin settings via its own data.json
+
+---
+
 ## Changelog Format
 
 Each phase entry should include:
