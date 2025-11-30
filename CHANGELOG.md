@@ -9,6 +9,8 @@ WEAVE-AI is forked from [Obsidian AI CLI](https://github.com/BlackDragonBE/obsid
 ## [0.0.4] - 2025-11-29
 
 ### Added
+- Selectable text in assistant responses (user-select enabled)
+- Copy button on assistant messages (hover to reveal, copies markdown)
 - Multi-target deploy system for developing across multiple Obsidian vaults
 - `npm run target:add <name> <vault-path>` - Add a new vault target
 - `npm run dev <target>` - Watch mode with deploy to specific vault
