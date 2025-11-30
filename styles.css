@@ -141,6 +141,40 @@
 
 .weave-message-content {
 	word-break: break-word;
+	user-select: text;
+	-webkit-user-select: text;
+	-moz-user-select: text;
+	-ms-user-select: text;
+}
+
+/* Copy button for assistant messages */
+.weave-message-copy {
+	display: block;
+	margin-top: 6px;
+	padding: 2px 8px;
+	border: none;
+	border-radius: 4px;
+	background: var(--background-modifier-hover);
+	color: var(--text-muted);
+	font-size: 0.7em;
+	cursor: pointer;
+	opacity: 0;
+	transition: opacity 0.15s ease;
+}
+
+.weave-message-assistant:hover .weave-message-copy {
+	opacity: 1;
+}
+
+.weave-message-copy:hover {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
+.weave-message-copy-success {
+	background: var(--text-success) !important;
+	color: white !important;
+	opacity: 1 !important;
 }
 
 .weave-message-content p:first-child {

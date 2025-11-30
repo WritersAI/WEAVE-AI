@@ -662,12 +662,48 @@ class ToolView extends ItemView {
 	private addAssistantMessage(): HTMLDivElement {
 		const chatContainer = this.responseArea.querySelector('.weave-chat-container') as HTMLElement;
 		const msgEl = chatContainer.createDiv('weave-message weave-message-assistant');
+
 		const contentEl = msgEl.createDiv({ cls: 'weave-message-content' });
 		contentEl.setText('...');
+
+		// Add copy button at bottom
+		const copyBtn = msgEl.createEl('button', {
+			cls: 'weave-message-copy',
+			text: 'Copy'
+		});
+		copyBtn.addEventListener('click', () => this.copyMessageContent(msgEl, copyBtn));
 
 		this.currentStreamingMessage = msgEl;
 		this.scrollToBottom();
 		return msgEl;
+	}
+
+	// Copy message content to clipboard
+	private async copyMessageContent(msgEl: HTMLElement, copyBtn: HTMLButtonElement): Promise<void> {
+		const contentEl = msgEl.querySelector('.weave-message-content') as HTMLElement;
+		if (!contentEl) return;
+
+		// Get the original markdown from chat history
+		const msgIndex = Array.from(this.responseArea.querySelectorAll('.weave-message-assistant')).indexOf(msgEl);
+		const assistantMessages = this.chatHistory.filter(m => m.role === 'assistant');
+		const text = assistantMessages[msgIndex]?.content || contentEl.innerText || '';
+
+		try {
+			await navigator.clipboard.writeText(text);
+
+			// Visual feedback
+			const originalText = copyBtn.textContent;
+			copyBtn.textContent = 'Copied!';
+			copyBtn.addClass('weave-message-copy-success');
+
+			setTimeout(() => {
+				copyBtn.textContent = originalText;
+				copyBtn.removeClass('weave-message-copy-success');
+			}, 1500);
+		} catch (err) {
+			console.error('Failed to copy:', err);
+			new Notice('Failed to copy to clipboard');
+		}
 	}
 
 	// Update streaming message content with markdown
